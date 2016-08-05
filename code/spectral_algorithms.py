@@ -439,14 +439,14 @@ def create_example_graph():
 
 def run():
     A = create_example_graph()
-    part = split_graph_by_recursive_spectral_partition(A,mode='Bethe',max_depth=2,num_groups=-1)
+    part = split_graph_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
     params_N, params_E = compute_GHRGM_parameters_from_partitions(A,part)
     print "PARAMETERS N"
     print params_N
     print "PARAMETERS E"
     print params_E
     print "NEW VERSION"
-    Dendro = split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=2,num_groups=-1)
+    Dendro = split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
     print Dendro.nodes()
     return Dendro
 
