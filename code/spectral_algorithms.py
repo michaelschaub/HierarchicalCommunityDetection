@@ -25,12 +25,12 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
 
     nr_nodes = A.shape[0]
     current_partition = spectral_partition(A, mode=mode, num_groups=num_groups)
-
+    
     # initialise networkx output dendrogram, and store some things as properties of the graph
     Dendro = GHRG()
     Dendro.network_nodes = np.arange(nr_nodes)
     Dendro.root_node = 0
-
+    
     # create root node and assign properties
     Emat, Nmat = compute_number_links_between_groups(A,current_partition)
     Dendro.add_node(Dendro.root_node, Er=Emat, Nr=Nmat)
@@ -52,10 +52,10 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
 
     # as long as we have not reached the max_depth yet,
     # and there is more than one group in the partition
-    while (hier_depth < max_depth or max_depth == -1):
+    while (hier_depth < max_depth or max_depth == -1) and len(nodes_next_level):
 
-        # print "\nLEVEL"
-        # print nodes_next_level
+        #~ print "\nLEVEL"
+        #~ print nodes_next_level
         next_level_temp = []
 
         for node in nodes_next_level:
@@ -168,10 +168,10 @@ def compute_number_links_between_groups(A,partition_vec):
     pmatrix = create_partition_matrix_from_vector(partition_vec)
     # number of columns is number of groups
     nr_groups = pmatrix.shape[1]
-
-    links_between_groups = pmatrix.T.dot(A).dot(pmatrix).getA()
-
-    nodes_per_group = np.sum(pmatrix,0)
+    
+    links_between_groups = pmatrix.T.dot(A).dot(pmatrix).toarray()
+    
+    nodes_per_group = pmatrix.sum(0).getA()
     possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
 
     return links_between_groups, possible_links_between_groups
@@ -196,16 +196,15 @@ def create_partition_matrix_from_vector(partition_vec):
     Create a partition indicator matrix from a given vector; -1 entries in partition vector will
     be ignored and can be used to denote unasigned nodes.
     """
-
     nr_nodes = partition_vec.size
-
+    
     # we interpret -1 in the partition vector as not assigned nodes >> include a 0 instead of 1
-    data = np.tile(1,(nr_nodes,1)).reshape(nr_nodes)
-    data[partition_vec==-1] = 0
-    partition_vec[partition_vec==-1] =0
+    #~ data = np.tile(1,(nr_nodes,1)).reshape(nr_nodes)
+    #~ data[partition_vec==-1] = 0
+    #~ partition_vec[partition_vec==-1] =0
+    k=len(np.unique(partition_vec))
 
-    partition_matrix = scipy.sparse.coo_matrix((data,(np.arange(nr_nodes),
-                                                      partition_vec))).toarray()
+    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
     return partition_matrix
 
 def spectral_partition(A, mode='Lap', num_groups=2):
@@ -269,17 +268,18 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
     # check if tau regularisation parameter is specified otherwise go for mean degree...
     if regularizer=='BHa':
         # set r to square root of average degree
-        r = np.sum(A)/float(A.shape[0])
+        r = A.sum()/float(A.shape[0])
         r = np.sqrt(r)
 
     elif regularizer=='BHm':
-        d = np.sum(A,axis=1).getA().flatten().astype(float)
-        r = np.sum(d**2)/np.sum(d) - 1
+        d = A.sum(axis=1).getA().flatten().astype(float)
+        r = np.sum(d*d)/np.sum(d) - 1
         r = np.sqrt(r)
 
     # construct both the positive and the negative variant of the BH
     BH_pos = build_BetheHessian(A,r)
     BH_neg = build_BetheHessian(A,-r)
+    ##LP:HERE
 
     if num_groups ==-1 and Kest=='simple':
         # start by computing first Kest eigenvalues/vectors
@@ -369,7 +369,8 @@ def build_BetheHessian(A, r):
     Construct Standard Bethe Hessian as discussed, e.g., in Saade et al
     B = (r^2-1)*I-r*A+D
     """
-    B = (r**2 -1)*np.eye(A.shape[0])-r*A + np.diagflat(np.sum(A,axis=1))
+    d = A.sum(axis=1).getA().flatten().astype(float)
+    B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0) 
     return B
 
 

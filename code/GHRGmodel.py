@@ -91,7 +91,9 @@ class GHRG(nx.DiGraph):
         G.remove_edges_from(G.selfloop_edges())
         return G
 
-
+    def to_scipy_sparse_matrix(self,G):
+        return nx.to_scipy_sparse_matrix(G)
+    
 
 
 
