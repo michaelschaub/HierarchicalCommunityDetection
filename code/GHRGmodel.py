@@ -18,6 +18,7 @@ class GHRG(nx.DiGraph):
     """
     def setParameters(self, omega):
         for node in self.nodes_iter():
+            level=len(nx.shortest_path(self,self.root_node,node))-1
             #create ordered list of child nodes
             self.node[node]['children']=self.successors(node)
             self.node[node]['children'].sort()
@@ -25,7 +26,7 @@ class GHRG(nx.DiGraph):
                 for cj,childj in enumerate(self.node[node]['children'][ci:],start=ci):
                     if not (ci==cj)  or (childi in self.leaf_nodes):
                         self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
-                        self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[ci,cj]
+                        self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
 
 
     """
@@ -90,11 +91,34 @@ class GHRG(nx.DiGraph):
         #remove self loops
         G.remove_edges_from(G.selfloop_edges())
         return G
-
+    
+    def print_nodes(self,keys=['Er','Nr']):
+        for node in self.nodes_iter():
+            print node
+            for key in keys:
+                print key, self.node[node][key]
+    
+    def lowest_partition(self):
+        for node in self.nodes_iter():
+            if len(self.successors(node))==0:
+                children=self.node[node]['nnodes']
+                print node, len(children), children
+    
+    def get_lowest_partition(self):
+        partition=np.zeros(self.node[self.root_node]['n'])
+        print len(partition)
+        pi=0
+        for node in self.nodes_iter():
+            if len(self.successors(node))==0:
+                children=self.node[node]['nnodes']
+                #~ print node, len(children), children
+                partition[children]=pi
+                pi+=1
+        return partition
+    
     def to_scipy_sparse_matrix(self,G):
         return nx.to_scipy_sparse_matrix(G)
     
-
 
 
 def example():

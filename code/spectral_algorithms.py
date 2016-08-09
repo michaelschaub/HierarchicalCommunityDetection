@@ -93,6 +93,9 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
                     subpart = partition == i
                     Dendro.node[n]['nnodes'] = parent_nnodes[subpart.nonzero()[0]]
                     Dendro.node[n]['n'] = len(subpart.nonzero()[0])
+            else:
+                Dendro.node[node]['children'] = []
+                    
 
         nodes_next_level = next_level_temp
         hier_depth +=1
@@ -198,6 +201,8 @@ def create_partition_matrix_from_vector(partition_vec):
     """
     nr_nodes = partition_vec.size
     
+    print  np.sum(partition_vec==-1)
+    assert np.sum(partition_vec==-1)<1
     # we interpret -1 in the partition vector as not assigned nodes >> include a 0 instead of 1
     #~ data = np.tile(1,(nr_nodes,1)).reshape(nr_nodes)
     #~ data[partition_vec==-1] = 0

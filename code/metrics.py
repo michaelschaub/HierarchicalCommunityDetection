@@ -1,11 +1,12 @@
 import numpy as np
+from scipy import sparse
 
 #calculate a distance matrix based on variation of information
 def calcVI(partitions):
     
     num_partitions,n=np.shape(partitions)
     nodes = np.arange(n)
-    c=len(np.unique(partitions[0]))
+    c=len(np.unique(partitions))
     vi_mat=np.zeros((num_partitions,num_partitions))
     
     
