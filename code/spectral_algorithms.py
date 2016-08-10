@@ -247,12 +247,16 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
 
         # start by computing first Kest eigenvalues/vectors
         Kest_pos = 10
+        if Kest_pos > A.shape[0]:
+            Kest_pos = A.shape[0]
         ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
         relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
         while (relevant_ev.size  == Kest_pos):
             Kest_pos *=2
             if Kest_pos > A.shape[0]:
                 Kest_pos = A.shape[0]
+            # print Kest_pos.shape
+            # print BH_pos.shape
             ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
             relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
 
@@ -268,6 +272,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
         X = evecs_BH_pos[:,range(kmax)]
 
         Kest_neg = 10
+        if Kest_neg > A.shape[0]:
+            Kest_neg = A.shape[0]
         ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(BH_neg,Kest_neg,which='SA')
         relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
         while (relevant_ev.size  == Kest_neg):
