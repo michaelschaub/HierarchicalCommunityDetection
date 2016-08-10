@@ -104,66 +104,6 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
 
     return Dendro
 
-
-
-def split_graph_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, max_depth=3):
-    """ Recursively split graph into pieces by employing a spectral clustering strategy.
-
-    Inputs: A          -- input adjacency matrix
-            mode       -- variant of spectral clustering to use (reg. Laplacian, Bethe Hessian, Non-Backtracking)
-            num_groups -- in how many groups do we want to split the graph at each step
-                          (default: 2; set to -1 to infer number of groups from spectrum)
-            max_depth  -- how many times do we want to recursively split the graph (default:3)
-                          Set to -1 for partitioning graph completely
-
-
-            Output: partition_vec -- clustering of the nodes
-    """
-    hier_depth = 0
-    hier_partitions = defaultdict(list)
-
-    current_partition = spectral_partition(A, mode=mode, num_groups=num_groups)
-    hier_partitions[0].append(current_partition)
-
-    # print hier_partitions
-    print "Now running recursion"
-
-    # as long as there is more than one group in the partition
-    while (hier_depth < max_depth or max_depth == -1):
-
-        print "hierarchical level: " + str(hier_depth)
-
-        for p in range(len(hier_partitions[hier_depth])):
-            # print "value p " + str(p)
-
-            current_partition = hier_partitions[hier_depth][p]
-            # print current_partition
-            nr_groups = np.unique(current_partition[current_partition != -1]).size
-            # print "num_groups " + str(nr_groups)
-
-            if nr_groups > 1:
-                for i in range(nr_groups):
-                    # create subgraphs
-                    subpart = current_partition == i
-                    subgraph_selection_mask = np.outer(subpart,subpart)
-                    nn_subgraph = subpart.sum()
-                    # print "Selection mask"
-                    # print subgraph_selection_mask
-                    Asub = A[subgraph_selection_mask].reshape(nn_subgraph,nn_subgraph)
-                    # print Asub
-
-                    # cluster subgraph recursively
-                    temp_partition = spectral_partition(Asub, mode=mode, num_groups=num_groups)
-                    full_partition = np.empty_like(current_partition)
-                    full_partition[subpart] = temp_partition
-                    full_partition[~subpart] = -1
-
-                    hier_partitions[hier_depth+1].append(full_partition)
-
-        hier_depth +=1
-
-    return hier_partitions
-
 def compute_number_links_between_groups(A,partition_vec):
     """
     Compute the number of possible and actual links between the groups indicated in the
