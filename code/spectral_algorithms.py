@@ -25,12 +25,12 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
 
     nr_nodes = A.shape[0]
     current_partition = spectral_partition(A, mode=mode, num_groups=num_groups)
-    
+
     # initialise networkx output dendrogram, and store some things as properties of the graph
     Dendro = GHRG()
     Dendro.network_nodes = np.arange(nr_nodes)
     Dendro.root_node = 0
-    
+
     # create root node and assign properties
     Emat, Nmat = compute_number_links_between_groups(A,current_partition)
     Dendro.add_node(Dendro.root_node, Er=Emat, Nr=Nmat)
@@ -66,19 +66,22 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
             subpart = Dendro.node[node]['nnodes']
             Asub = A[subpart,:]
             Asub = Asub[:,subpart]
-            # print Asub
-            # print "SUBPART"
-            # print subpart
+            print Asub
+            print "SUBPART"
+            print subpart
 
 
             # cluster subgraph recursively
             partition = spectral_partition(Asub, mode=mode, num_groups=num_groups)
-            # print "PARTITION"
-            # print partition
+            print "PARTITION"
+            print partition
 
             Emat, Nmat = compute_number_links_between_groups(Asub,partition)
             Dendro.node[node]['Er'] = Emat
             Dendro.node[node]['Nr'] = Nmat
+            print "EMAT"
+            print Emat
+            print Dendro.node[0]['Er']
             nr_groups = np.unique(partition).size
 
             # print "NRG"
@@ -87,15 +90,14 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
                 children  = Dendro.add_children(node,nr_groups)
                 Dendro.node[node]['children'] = children
                 next_level_temp.extend(children)
-                parent = Dendro.predecessors(node)[0]
-                parent_nnodes = Dendro.node[parent]['nnodes']
+                parent_nnodes = Dendro.node[node]['nnodes']
                 for i, n in enumerate(children):
                     subpart = partition == i
                     Dendro.node[n]['nnodes'] = parent_nnodes[subpart.nonzero()[0]]
                     Dendro.node[n]['n'] = len(subpart.nonzero()[0])
             else:
                 Dendro.node[node]['children'] = []
-                    
+
 
         nodes_next_level = next_level_temp
         hier_depth +=1
@@ -171,9 +173,9 @@ def compute_number_links_between_groups(A,partition_vec):
     pmatrix = create_partition_matrix_from_vector(partition_vec)
     # number of columns is number of groups
     nr_groups = pmatrix.shape[1]
-    
+
     links_between_groups = pmatrix.T.dot(A).dot(pmatrix).toarray()
-    
+
     nodes_per_group = pmatrix.sum(0).getA()
     possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
 
@@ -200,7 +202,7 @@ def create_partition_matrix_from_vector(partition_vec):
     be ignored and can be used to denote unasigned nodes.
     """
     nr_nodes = partition_vec.size
-    
+
     print  np.sum(partition_vec==-1)
     assert np.sum(partition_vec==-1)<1
     # we interpret -1 in the partition vector as not assigned nodes >> include a 0 instead of 1
@@ -375,7 +377,7 @@ def build_BetheHessian(A, r):
     B = (r^2-1)*I-r*A+D
     """
     d = A.sum(axis=1).getA().flatten().astype(float)
-    B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0) 
+    B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0)
     return B
 
 
