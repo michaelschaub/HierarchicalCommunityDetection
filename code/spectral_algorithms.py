@@ -66,22 +66,22 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
             subpart = Dendro.node[node]['nnodes']
             Asub = A[subpart,:]
             Asub = Asub[:,subpart]
-            print Asub
-            print "SUBPART"
-            print subpart
+            # print Asub
+            # print "SUBPART"
+            # print subpart
 
 
             # cluster subgraph recursively
             partition = spectral_partition(Asub, mode=mode, num_groups=num_groups)
-            print "PARTITION"
-            print partition
+            # print "PARTITION"
+            # print partition
 
             Emat, Nmat = compute_number_links_between_groups(Asub,partition)
             Dendro.node[node]['Er'] = Emat
             Dendro.node[node]['Nr'] = Nmat
-            print "EMAT"
-            print Emat
-            print Dendro.node[0]['Er']
+            # print "EMAT"
+            # print Emat
+            # print Dendro.node[0]['Er']
             nr_groups = np.unique(partition).size
 
             # print "NRG"
@@ -128,7 +128,7 @@ def create_partition_matrix_from_vector(partition_vec):
     """
     nr_nodes = partition_vec.size
 
-    print  np.sum(partition_vec==-1)
+    # print  np.sum(partition_vec==-1)
     assert np.sum(partition_vec==-1)<1
     # we interpret -1 in the partition vector as not assigned nodes >> include a 0 instead of 1
     #~ data = np.tile(1,(nr_nodes,1)).reshape(nr_nodes)
@@ -220,6 +220,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
         relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
         while (relevant_ev.size  == Kest_pos):
             Kest_pos *=2
+            if Kest_pos > A.shape[0]:
+                Kest_pos = A.shape[0]
             ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
             relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
 
@@ -230,12 +232,14 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
         relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
         while (relevant_ev.size  == Kest_neg):
             Kest_neg *=2
+            if Kest_neg > A.shape[0]:
+                Kest_neg = A.shape[0]
             ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(BH_neg,Kest_neg,which='SA')
             relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
 
         X = np.hstack([X, evecs_BH_neg[:,relevant_ev]])
         num_groups = X.shape[1]
-        print num_groups
+        # print num_groups
 
     elif num_groups ==-1 and Kest=='adjusted':
         # tuning parameter t in Le 2015
@@ -247,7 +251,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
         relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
         while (relevant_ev.size  == Kest_pos):
             Kest_pos *=2
-            #TODO: include check that Kest is not too large for matrix!
+            if Kest_pos > A.shape[0]:
+                Kest_pos = A.shape[0]
             ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
             relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
 
@@ -267,7 +272,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
         relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
         while (relevant_ev.size  == Kest_neg):
             Kest_neg *=2
-            #TODO: include check that Kest is not too large for matrix!
+            if Kest_neg > A.shape[0]:
+                Kest_neg = A.shape[0]
             ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(BH_neg,Kest_neg,which='SA')
             relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
 
