@@ -98,6 +98,16 @@ class GHRG(nx.DiGraph):
             for key in keys:
                 print key, self.node[node][key]
     
+    def partition_level(self,level):
+        #TODO other level except zero
+        partition=np.zeros(self.node[self.root_node]['n'])
+        level_nodes=self.successors(self.root_node)
+        for ni,node in enumerate(level_nodes):
+            children=self.node[node]['nnodes']
+            partition[children]=ni
+        return partition
+            
+    
     def lowest_partition(self):
         for node in self.nodes_iter():
             if len(self.successors(node))==0:

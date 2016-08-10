@@ -2,6 +2,9 @@ import numpy as np
 from GHRGmodel import GHRG
 import spectral_algorithms as spectral
 import metrics
+from matplotlib import pyplot as plt
+
+plt.ion()
 
 """
 Experiment 1
@@ -13,24 +16,51 @@ def exp1(ratio=0.1):
     level_k=2
     K=level_k**n_levels
     
+    ratios=np.arange(0.1,1.,0.1)
     
-    #~ for ratio in [0.1]:
+    bb_mean=np.zeros(len(ratios))
+    tt_mean=np.zeros(len(ratios))
+    tb_mean=np.zeros(len(ratios))
     
-   
-    D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
-    G=D_gen.generateNetwork()
-    A = D_gen.to_scipy_sparse_matrix(G)
+    runs=10
+    run_count=np.ones(len(ratios))*runs
     
-    D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
+    for ri,ratio in enumerate(ratios):
+        
+        for run in xrange(runs):
+            print ratio, run
+            D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
+            G=D_gen.generateNetwork()
+            A = D_gen.to_scipy_sparse_matrix(G)
+            
+            #~ try:
+            D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
+        
+            partitions=np.empty((2,n))
+            partitions[0,:] = D_gen.get_lowest_partition()
+            partitions[1,:] = D_inferred.get_lowest_partition()
+            bb_mean[ri]+=metrics.calcVI(partitions)[0,1]
+            
+            partitions[1,:] = D_inferred.partition_level(0)
+            tb_mean[ri]+= metrics.calcVI(partitions)[0,1]
+            partitions[0,:] = D_gen.partition_level(0)
+            tt_mean[ri]+= metrics.calcVI(partitions)[0,1]
+            #~ except:
+                #~ print 'FAIL'
+                #~ run_count[ri]-=1
     
-    partitions=np.empty((2,n))
-    partitions[0,:] = D_gen.get_lowest_partition()
-    partitions[1,:] = D_inferred.get_lowest_partition()
-    try:
-        print metrics.calcVI(partitions)
-    except ValueError:
-        print "error caught"
-    return D_gen, D_inferred, partitions
+    tt_mean/=run_count
+    tb_mean/=run_count
+    bb_mean/=run_count
+    
+    plt.figure()
+    plt.plot(ratios,bb_mean)
+    plt.plot(ratios,tb_mean)
+    plt.plot(ratios,tt_mean)
+    
+    plt.legend(['low-low','high-low', 'high-high'])
+    
+    return bb_mean, tb_mean, tt_mean
     
 
 """
