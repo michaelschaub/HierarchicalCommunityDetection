@@ -121,21 +121,6 @@ def compute_number_links_between_groups(A,partition_vec):
 
     return links_between_groups, possible_links_between_groups
 
-def compute_GHRGM_parameters_from_partitions(A, hier_partitions):
-    """
-    Compute the N_r and E_r parameters for the GHRGM, given a hierarchical set of partitions
-    """
-
-    parameters_N = defaultdict(list)
-    parameters_E = defaultdict(list)
-    for level in hier_partitions:
-        for p in hier_partitions[level]:
-            Emat, Nmat = compute_number_links_between_groups(A,p)
-            parameters_N[level].append(Nmat)
-            parameters_E[level].append(Emat)
-
-    return parameters_N, parameters_E
-
 def create_partition_matrix_from_vector(partition_vec):
     """
     Create a partition indicator matrix from a given vector; -1 entries in partition vector will
@@ -384,31 +369,8 @@ def create_example_graph():
     A = 1*scipy.sparse.tril(A) + scipy.sparse.tril(A).T - np.diag(np.diag(A))
     return A
 
-
-def run():
-    A = create_example_graph()
-    part = split_graph_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-    params_N, params_E = compute_GHRGM_parameters_from_partitions(A,part)
-    print "PARAMETERS N"
-    print params_N
-    print "PARAMETERS E"
-    print params_E
-    print "NEW VERSION"
-    Dendro = split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-    print Dendro.nodes()
-    return Dendro
-
 if __name__ == "__main__":
 
     A = create_example_graph()
-    part = split_graph_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-    print "PARTITIONS"
-    print part
-    params_N, params_E = compute_GHRGM_parameters_from_partitions(A1,part)
-    print "PARAMETERS N"
-    print params_N
-    print "PARAMETERS E"
-    print params_E
-    print "NEW VERSION"
     Dendro = split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
     print Dendro.nodes()
