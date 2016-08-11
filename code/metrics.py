@@ -1,7 +1,8 @@
+from __future__ import division
 import numpy as np
 from scipy import sparse
+import scipy
 from scipy.optimize import linear_sum_assignment
-from __future__ import division
 
 #calculate a distance matrix based on variation of information
 def calcVI(partitions):
