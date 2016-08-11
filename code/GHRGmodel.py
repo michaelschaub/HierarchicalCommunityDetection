@@ -24,9 +24,15 @@ class GHRG(nx.DiGraph):
             self.node[node]['children'].sort()
             for ci,childi in enumerate(self.node[node]['children']):
                 for cj,childj in enumerate(self.node[node]['children'][ci:],start=ci):
-                    if not (ci==cj)  or (childi in self.leaf_nodes):
+                    if not (ci==cj): #  or (childi in self.leaf_nodes):
+                        #~ print ci,cj,self.node[node]['Nr'], node
                         self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
                         self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
+            if node in self.leaf_nodes:
+                #~ print ci,cj
+                self.node[node]['Nr'] = np.array([[self.node[node]['n']*self.node[node]['n']]])
+                self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
+                        
 
 
     """
@@ -80,8 +86,12 @@ class GHRG(nx.DiGraph):
             children=self.node[v]['children']
             Nr=self.node[v]['Nr']
             for ci,cj in izip(*Nr.nonzero()):
-                childi=self.node[children[ci]]
-                childj=self.node[children[cj]]
+                try:
+                    childi=self.node[children[ci]]
+                    childj=self.node[children[cj]]
+                except IndexError:      # if it is a leaf node
+                    childi=self.node[v]
+                    childj=self.node[v]
                 alpha=np.ones(Nr[ci,cj])+self.node[v]['Er'][ci,cj]
                 beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-self.node[v]['Er'][ci,cj])
                 p = np.random.beta(alpha,beta)
@@ -129,6 +139,46 @@ class GHRG(nx.DiGraph):
     def to_scipy_sparse_matrix(self,G):
         return nx.to_scipy_sparse_matrix(G)
     
+    
+    def _get_child_params(self,v):
+        #recursively obtain child node params
+        Nrs=[]
+        Ers=[]
+        nr=[]
+        for child in self.node[v]['children']:
+            Nr,Er=self._get_child_params(child)
+            Nrs.append(Nr)
+            Ers.append(Er)
+            nr.append(len(Nr))
+        #current node params
+        Nr=self.node[v]['Nr']
+        Er=self.node[v]['Er']
+        
+        block_Nr=[]#np.empty((len(nr),len(nr)),dtype=object)
+        block_Er=[]#np.empty((len(nr),len(nr)),dtype=object)
+        
+        for ci,childi in enumerate(self.node[v]['children']):
+            block_Nr.append([])
+            block_Er.append([])
+            for cj,childi in enumerate(self.node[v]['children']):
+                if ci==cj:
+                    block_Er[ci].append(Ers[ci])
+                    block_Nr[ci].append(Nrs[ci])
+                else:
+                    block_Nr[ci].append(Nr[ci,cj]*np.ones((nr[ci],nr[cj])))
+                    block_Er[ci].append(Er[ci,cj]*np.ones((nr[ci],nr[cj])))
+        
+        try:
+            return np.bmat(block_Nr).getA(),np.bmat(block_Er).getA()
+        except ValueError:
+            return Nr,Er
+    
+    
+    def construct_full_block_params(self):
+        return self._get_child_params(self.root_node)
+    
+    def detectability_report(self):
+        pass
 
 
 def example():
@@ -136,6 +186,19 @@ def example():
     G=D.generateNetwork()
     return G
 
+
+"""
+Calculate in and out block degree parameters for a given mean degree and ratio
+parameters:
+    cm  : mean degree
+    ratio   : cout/cin
+    K   : number of groups
+    ncin    : number of cin blocks per row
+"""
+def calculateDegrees(cm,ratio,K,ncin=1.):
+    cin = (K*cm) / (ncin+(K-ncin)*ratio)
+    cout = cin * ratio
+    return cin,cout
 
 
 """
@@ -147,11 +210,25 @@ parameters:
     n_levels    : depth of GHRG
     level_k     : number of groups at each level
 """
-def create2paramGHRG(n,p_in,p_out,n_levels,level_k):
+def create2paramGHRG(n,cm,ratio,n_levels,level_k):
 
     #interaction probabilities
-    omega = np.ones((level_k,level_k))*p_out + np.eye(level_k)*(p_in-p_out)
-
+    omega={}
+    for level in xrange(n_levels):
+        cin,cout=calculateDegrees(cm,ratio,level_k)
+        print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
+        omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
+        cm=cin
+    
+    #~ omega={0:np.ones((level_k,level_k))*cm/n}
+    #~ for level in xrange(1,n_levels):
+        #~ cin,cout=calculateDegrees(cm,ratio,level_k)
+        #~ print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
+        #~ omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
+        #~ cm=cin
+    
+    #~ print omega
+    
     D=GHRG()
 
     #network_nodes contains an ordered list of the network nodes

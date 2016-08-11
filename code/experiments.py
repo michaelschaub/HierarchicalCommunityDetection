@@ -9,7 +9,7 @@ plt.ion()
 """
 Experiment 1
 """
-def exp1(ratio=0.1):
+def exp1(runs=10):
     cm=20
     n=1000
     n_levels=3
@@ -22,7 +22,6 @@ def exp1(ratio=0.1):
     tt_mean=np.zeros(len(ratios))
     tb_mean=np.zeros(len(ratios))
     
-    runs=10
     run_count=np.ones(len(ratios))*runs
     
     for ri,ratio in enumerate(ratios):
