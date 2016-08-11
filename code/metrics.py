@@ -1,5 +1,7 @@
 import numpy as np
 from scipy import sparse
+from scipy.optimize import linear_sum_assignment
+from __future__ import division
 
 #calculate a distance matrix based on variation of information
 def calcVI(partitions):
@@ -30,3 +32,35 @@ def calcVI(partitions):
             vi_mat[j,i]=vi
 
     return vi_mat
+
+
+def fraction_correctly_aligned(partition1,partition2):
+    """
+    Compares two partitions and computes the fraction of nodes in partition1 that can be
+    aligned with the nodes in partition2
+    """
+
+    pmatrix1 = create_partition_matrix_from_vector(partition1)
+    pmatrix2 = create_partition_matrix_from_vector(partition2)
+
+    # cost is minimized --- overlap maximized
+    cost_matrix = -pmatrix1.T.dot(pmatrix2)
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    cost = -cost_matrix[row_ind, col_ind].sum()
+
+    return cost
+
+def overlap_score(partition1, partition2):
+    """
+    Compare the overlap score as defined, e.g., in Krzakala et al's spectral redemption paper
+    """
+    raw_overlap = fraction_correctly_aligned(partition1, partition2)
+    num_nodes, num_groups = partition1.shape
+    num_groups2 = partition2.shape[1]
+
+    if num_groups2 != num_groups:
+        print "partitions with different number of groups are prepared! Please prepare the results \
+               accordingly"
+
+    overlap_score  = (raw_overlap/num_nodes - 1/num_groups)/(1-1/num_groups)
+    return overlap_score
