@@ -48,7 +48,7 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
         Dendro.node[n]['n'] = len(subpart.nonzero()[0])
 
     hier_depth = 0
-    print "Now running recursion"
+    print "\nNow running recursion"
 
     # as long as we have not reached the max_depth yet,
     # and there is more than one group in the partition
@@ -127,13 +127,6 @@ def create_partition_matrix_from_vector(partition_vec):
     be ignored and can be used to denote unasigned nodes.
     """
     nr_nodes = partition_vec.size
-
-    # print  np.sum(partition_vec==-1)
-    assert np.sum(partition_vec==-1)<1
-    # we interpret -1 in the partition vector as not assigned nodes >> include a 0 instead of 1
-    #~ data = np.tile(1,(nr_nodes,1)).reshape(nr_nodes)
-    #~ data[partition_vec==-1] = 0
-    #~ partition_vec[partition_vec==-1] =0
     k=len(np.unique(partition_vec))
 
     partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
@@ -192,10 +185,33 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
 
     return partition_vector
 
-def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjusted'):
+def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
     """
     Perform one round of spectral clustering using the Bethe Hessian
     """
+    def find_negative_eigenvectors(M):
+        Kmax = M.shape[0]-1
+        K = min(10,Kmax)
+        ev, evecs = scipy.sparse.linalg.eigsh(M,K,which='SA')
+        relevant_ev = np.nonzero(ev <0)[0]
+        while (relevant_ev.size  == K):
+            K = min(2*K, Kmax)
+            ev, evecs = scipy.sparse.linalg.eigsh(M,K,which='SA')
+            relevant_ev = np.nonzero(ev<0)[0]
+
+        return evecs[:,relevant_ev]
+
+    def find_enough_eigenvectors(M):
+        Kmax = M.shape[0]-1
+        K = min(30,Kmax)
+        ev, evecs = scipy.sparse.linalg.eigsh(M,K,which='SA')
+        neg_ev = np.nonzero(ev <0)[0]
+        while (neg_ev.size  == K):
+            K = min(2*K, Kmax)
+            ev, evecs = scipy.sparse.linalg.eigsh(M,K,which='SA')
+            neg_ev = np.nonzero(ev<0)[0]
+
+        return ev, evecs
 
     # check if tau regularisation parameter is specified otherwise go for mean degree...
     if regularizer=='BHa':
@@ -209,97 +225,31 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', Kest='adjuste
         r = np.sqrt(r)
 
     # construct both the positive and the negative variant of the BH
+    if not all(A.sum(axis=1)):
+        print "GRAPH CONTAINS NODES WITH DEGREE ZERO"
+
     BH_pos = build_BetheHessian(A,r)
     BH_neg = build_BetheHessian(A,-r)
-    ##LP:HERE
+    # print "BHPOS"
+    # print BH_pos.shape
 
-    if num_groups ==-1 and Kest=='simple':
-        # start by computing first Kest eigenvalues/vectors
-        Kest_pos = 20
-        ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
-        relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
-        while (relevant_ev.size  == Kest_pos):
-            Kest_pos *=2
-            if Kest_pos > A.shape[0]:
-                Kest_pos = A.shape[0]
-            ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
-            relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
 
-        X = evecs_BH_pos[:,relevant_ev]
+    if num_groups ==-1:
+        relevant_ev = find_negative_eigenvectors(BH_pos)
+        X = relevant_ev
 
-        Kest_neg = 20
-        ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(BH_neg,Kest_neg,which='SA')
-        relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
-        while (relevant_ev.size  == Kest_neg):
-            Kest_neg *=2
-            if Kest_neg > A.shape[0]:
-                Kest_neg = A.shape[0]
-            ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(BH_neg,Kest_neg,which='SA')
-            relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
-
-        X = np.hstack([X, evecs_BH_neg[:,relevant_ev]])
-        num_groups = X.shape[1]
-        # print num_groups
-
-    elif num_groups ==-1 and Kest=='adjusted':
-        # tuning parameter t in Le 2015
-        t=5
-
-        # start by computing first Kest eigenvalues/vectors
-        Kest_pos = 10
-        if Kest_pos > A.shape[0]:
-            Kest_pos = A.shape[0]
-        ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
-        relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
-        while (relevant_ev.size  == Kest_pos):
-            Kest_pos *=2
-            if Kest_pos > A.shape[0]:
-                Kest_pos = A.shape[0]
-            # print Kest_pos.shape
-            # print BH_pos.shape
-            ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(BH_pos,Kest_pos,which='SA')
-            relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
-
-        ev_BH_pos.sort()
-        tev = t*ev_BH_pos
-        kmax = 0
-        for k in range(ev_BH_pos.size-1):
-            if tev[k] <= ev_BH_pos[k+1]:
-                kmax = k+1
-            else:
-                break
-
-        X = evecs_BH_pos[:,range(kmax)]
-
-        Kest_neg = 10
-        if Kest_neg > A.shape[0]:
-            Kest_neg = A.shape[0]
-        ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(BH_neg,Kest_neg,which='SA')
-        relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
-        while (relevant_ev.size  == Kest_neg):
-            Kest_neg *=2
-            if Kest_neg > A.shape[0]:
-                Kest_neg = A.shape[0]
-            ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(BH_neg,Kest_neg,which='SA')
-            relevant_ev = np.nonzero(ev_BH_neg <=0)[0]
-
-        ev_BH_neg.sort()
-        tev = t*ev_BH_neg
-        kmax = 0
-        for k in range(ev_BH_neg.size-1):
-            if tev[k] <= ev_BH_neg[k+1]:
-                kmax = k+1
-            else:
-                break
-
-        X = np.hstack([X, evecs_BH_neg[:,range(kmax)]])
+        relevant_ev = find_negative_eigenvectors(BH_neg)
+        X = np.hstack([X, relevant_ev])
         num_groups = X.shape[1]
 
     else:
-        # fing eigenvectors corresponding to the algebraically smallest (most neg.) eigenvalues
-        _, evecs_pos = scipy.sparse.linalg.eigsh(BH_pos,num_groups,which='SA')
-        _, evecs_neg = scipy.sparse.linalg.eigsh(BH_neg,num_groups,which='SA')
+        # find eigenvectors corresponding to the algebraically smallest (most neg.) eigenvalues
+        ev_pos, evecs_pos = scipy.sparse.linalg.eigsh(BH_pos,num_groups,which='SA')
+        ev_neg, evecs_neg = scipy.sparse.linalg.eigsh(BH_neg,num_groups,which='SA')
+        ev_all = np.hstack([ev_pos, ev_neg])
+        index = np.argsort(ev_all)
         X = np.hstack([evecs_pos,evecs_neg])
+        X = X[:,index]
 
     clust = KMeans(n_clusters = num_groups)
     clust.fit(X)
