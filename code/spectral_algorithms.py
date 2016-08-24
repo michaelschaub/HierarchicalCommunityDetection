@@ -228,6 +228,9 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
     if not all(A.sum(axis=1)):
         print "GRAPH CONTAINS NODES WITH DEGREE ZERO"
 
+    if r <= 0:
+        print "Something is going wrong here, regularizer should be greater than 0"
+
     BH_pos = build_BetheHessian(A,r)
     BH_neg = build_BetheHessian(A,-r)
     # print "BHPOS"
