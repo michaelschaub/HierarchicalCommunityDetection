@@ -5,7 +5,6 @@ import scipy.sparse
 import networkx as nx
 from sklearn.cluster import KMeans
 from sklearn import preprocessing
-from collections import defaultdict
 from GHRGmodel import GHRG
 
 
@@ -181,11 +180,12 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     clust = KMeans(n_clusters = num_groups)
     clust.fit(X)
     partition_vector = clust.labels_
+    print partition_vec
 
 
     return partition_vector
 
-def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
+def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHm'):
     """
     Perform one round of spectral clustering using the Bethe Hessian
     """
@@ -228,13 +228,15 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
     if not all(A.sum(axis=1)):
         print "GRAPH CONTAINS NODES WITH DEGREE ZERO"
 
-    if r <= 0:
-        print "Something is going wrong here, regularizer should be greater than 0"
+    if all(A.sum(axis=1) == 0):
+        print "empty Graph -- return all in one partition"
+        partition_vector = np.zeros(A.shape[0],dtype='int')
+        return partition_vector
 
     BH_pos = build_BetheHessian(A,r)
     BH_neg = build_BetheHessian(A,-r)
-    # print "BHPOS"
-    # print BH_pos.shape
+    print "BHPOS"
+    print BH_pos.shape
 
 
     if num_groups ==-1:
@@ -254,9 +256,17 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
         X = np.hstack([evecs_pos,evecs_neg])
         X = X[:,index]
 
+    if num_groups == 0:
+        print "no indication for grouping -- return all in one partition"
+        partition_vector = np.zeros(A.shape[0],dtype='int')
+        return partition_vector
+
     clust = KMeans(n_clusters = num_groups)
     clust.fit(X)
     partition_vector = clust.labels_
+    # print "PARTITION"
+    # print partition_vector
+
 
     return partition_vector
 
@@ -338,4 +348,4 @@ if __name__ == "__main__":
 
     A = create_example_graph()
     Dendro = split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-    print Dendro.nodes()
+
