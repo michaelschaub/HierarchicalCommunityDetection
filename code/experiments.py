@@ -142,9 +142,10 @@ parameters:
 def create2paramGHRG(n,cm,ratio,n_levels,level_k):
 
     #interaction probabilities
-    omega={0:np.ones((level_k,level_k))*cm/n}
-    for level in xrange(1,n_levels):
+    omega={}
+    for level in xrange(n_levels):
         cin,cout=calculateDegrees(cm,ratio,level_k)
+        print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
         omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
         cm=cin
 
