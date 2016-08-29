@@ -7,6 +7,7 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import MeanShift
 from sklearn import preprocessing
 from GHRGmodel import GHRG
+from matplotlib import pyplot as plt
 
 def split_network_hierarchical_by_spectral_partition(A, mode='Lap', num_groups=2):
     """ Recursively split graph into pieces by employing a spectral clustering strategy.
@@ -361,9 +362,14 @@ def hier_cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
         X = relevant_ev
         ordering = np.argsort(evalues)
         evalues_sorted = evalues[ordering]
-        relevant_ev_sorted = relevant_ev[ordering]
+        relevant_ev_sorted = relevant_ev[:,ordering]
         print "EValues"
         print evalues_sorted
+        plt.figure()
+        plt.plot(relevant_ev_sorted[:,:4])
+        plt.show()
+        plt.figure()
+        plt.spy(A,markersize=1)
 
         ClustDetect = MeanShift()
         ClustDetect.fit(evalues_sorted.reshape(-1, 1))
