@@ -71,7 +71,7 @@ def exp2(runs=10):
     level_k=2
     K=level_k**n_levels
 
-    ratios=np.arange(0.1,.2,0.1)
+    ratios=np.arange(0.1,1,0.1)
 
     bb_mean=np.zeros(len(ratios))
     tt_mean=np.zeros(len(ratios))

@@ -359,29 +359,15 @@ def hier_cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
 
     if num_groups ==-1:
         relevant_ev, evalues = find_negative_eigenvectors(BH_pos)
-        X = relevant_ev
-        ordering = np.argsort(evalues)
-        evalues_sorted = evalues[ordering]
-        relevant_ev_sorted = relevant_ev[:,ordering]
-        print "EValues"
-        print evalues_sorted
-        plt.figure()
-        plt.plot(relevant_ev_sorted[:,:4])
-        plt.show()
-        plt.figure()
-        plt.spy(A,markersize=1)
+        relevant_ev2, evalues2 = find_negative_eigenvectors(BH_neg)
+        X = np.hstack([relevant_ev, relevant_ev2])
+        all_ev = np.hstack([evalues, evalues2])
 
-        ClustDetect = MeanShift()
-        ClustDetect.fit(evalues_sorted.reshape(-1, 1))
-        classes = ClustDetect.labels_
-        print classes
-
-        relevant_ev, evalues2 = find_negative_eigenvectors(BH_neg)
-        X = np.hstack([X, relevant_ev])
         num_groups = X.shape[1]
 
-        #TODO: check if there are hierarchies in the evals -- how does this look in disassorative?
-        # ignore for now
+        ordering = np.argsort(all_ev)
+        evalues_sorted = all_ev[ordering]
+        relevant_ev_sorted = X[:,ordering]
 
         if num_groups == 0:
             print "no indication for grouping -- return all in one partition"
@@ -395,14 +381,30 @@ def hier_cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
         ev_all = np.hstack([ev_pos, ev_neg])
         index = np.argsort(ev_all)
         X = np.hstack([evecs_pos,evecs_neg])
-        X = X[:,index]
+        X = X[:,index[:num_groups]]
 
 
     clust = KMeans(n_clusters = num_groups)
     clust.fit(X)
     partition_vector = clust.labels_
 
+    for ii in range(1,num_groups):
+        temp_cluster= KMeans(n_clusters = ii+1)
+        temp_cluster.fit(X[:,:ii])
+        P = build_projector_matrix(temp_cluster.labels_)
+        delta = 0.9
+        test = np.linalg.norm(P.dot(X),axis=0)
+        print test > delta
+        # from IPython import embed
+        # embed()
+
     return partition_vector
+
+def build_projector_matrix(pvector):
+    Htemp = create_partition_matrix_from_vector(pvector)
+    D = Htemp.T.dot(Htemp)
+    P = Htemp.dot(scipy.sparse.linalg.spsolve(D,Htemp.T))
+    return P
 
 def build_BetheHessian(A, r):
     """
