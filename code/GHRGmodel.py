@@ -32,7 +32,7 @@ class GHRG(nx.DiGraph):
                 #~ print ci,cj
                 self.node[node]['Nr'] = np.array([[self.node[node]['n']*self.node[node]['n']]])
                 self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
-                        
+
 
 
     """
@@ -101,13 +101,13 @@ class GHRG(nx.DiGraph):
         #remove self loops
         G.remove_edges_from(G.selfloop_edges())
         return G
-    
+
     def print_nodes(self,keys=['Er','Nr']):
         for node in self.nodes_iter():
             print node
             for key in keys:
                 print key, self.node[node][key]
-    
+
     def partition_level(self,level):
         #TODO other level except zero
         partition=np.zeros(self.node[self.root_node]['n'])
@@ -116,14 +116,14 @@ class GHRG(nx.DiGraph):
             children=self.node[node]['nnodes']
             partition[children]=ni
         return partition
-            
-    
+
+
     def lowest_partition(self):
         for node in self.nodes_iter():
             if len(self.successors(node))==0:
                 children=self.node[node]['nnodes']
                 print node, len(children), children
-    
+
     def get_lowest_partition(self):
         partition=np.zeros(self.node[self.root_node]['n'])
         print len(partition)
@@ -135,11 +135,11 @@ class GHRG(nx.DiGraph):
                 partition[children]=pi
                 pi+=1
         return partition
-    
+
     def to_scipy_sparse_matrix(self,G):
         return nx.to_scipy_sparse_matrix(G)
-    
-    
+
+
     def _get_child_params(self,v):
         #recursively obtain child node params
         Nrs=[]
@@ -153,10 +153,10 @@ class GHRG(nx.DiGraph):
         #current node params
         Nr=self.node[v]['Nr']
         Er=self.node[v]['Er']
-        
+
         block_Nr=[]#np.empty((len(nr),len(nr)),dtype=object)
         block_Er=[]#np.empty((len(nr),len(nr)),dtype=object)
-        
+
         for ci,childi in enumerate(self.node[v]['children']):
             block_Nr.append([])
             block_Er.append([])
@@ -167,16 +167,16 @@ class GHRG(nx.DiGraph):
                 else:
                     block_Nr[ci].append(Nr[ci,cj]*np.ones((nr[ci],nr[cj])))
                     block_Er[ci].append(Er[ci,cj]*np.ones((nr[ci],nr[cj])))
-        
+
         try:
             return np.bmat(block_Nr).getA(),np.bmat(block_Er).getA()
         except ValueError:
             return Nr,Er
-    
-    
+
+
     def construct_full_block_params(self):
         return self._get_child_params(self.root_node)
-    
+
     def detectability_report(self):
         pass
 
@@ -219,16 +219,7 @@ def create2paramGHRG(n,cm,ratio,n_levels,level_k):
         print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
         omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
         cm=cin
-    
-    #~ omega={0:np.ones((level_k,level_k))*cm/n}
-    #~ for level in xrange(1,n_levels):
-        #~ cin,cout=calculateDegrees(cm,ratio,level_k)
-        #~ print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
-        #~ omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
-        #~ cm=cin
-    
-    #~ print omega
-    
+
     D=GHRG()
 
     #network_nodes contains an ordered list of the network nodes
