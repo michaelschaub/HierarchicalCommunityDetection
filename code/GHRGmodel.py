@@ -3,7 +3,8 @@ import numpy as np
 from itertools import izip
 
 """
-GHRG base class is a networkx DiGraph
+GHRG base class is a networkx DiGraph that stores a dendrogram of the hierarchical model.
+The dendrogram is a directed tree with edges pointing outward from the root towards the leafs.
 """
 class GHRG(nx.DiGraph):
 
@@ -23,7 +24,7 @@ class GHRG(nx.DiGraph):
             self.node[node]['children']=self.successors(node)
             self.node[node]['children'].sort()
             for ci,childi in enumerate(self.node[node]['children']):
-                for cj,childj in enumerate(self.node[node]['children'][ci:],start=ci):
+                for cj,childj in enumerate(self.node[node]['children']):
                     if not (ci==cj): #  or (childi in self.leaf_nodes):
                         #~ print ci,cj,self.node[node]['Nr'], node
                         self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
@@ -63,6 +64,63 @@ class GHRG(nx.DiGraph):
             self.add_edge(parent, new_node)
 
         return new_nodes
+
+    """
+    Function to merge list of nodes in dendrogram and insert a new node in the hierarchy
+    """
+    def insert_hier_merge_node(self,node_ids):
+
+        ##################################################
+        # 1) preallocate information stored in merged node
+        joint_nnodes = np.empty(0)
+        joint_n = 0
+        n_blocks = len(node_ids)
+
+        # Check that all nodes are mergeable, i.e., have the same parent node
+        parent_id = self.predecessors(node_ids[0])[0]
+        ids = np.empty(len(node_ids),dtype='int')
+        for counter, node in enumerate(node_ids):
+            # check consistency of merger
+            if self.predecessors(node)[0] != parent_id:
+                print "These two nodes / blocks cannot be merged!"
+                return False
+
+            # get indices for Nr and Er arrays
+            ids[counter] = self.node[parent_id]['children'].index(node)
+
+            joint_nnodes = np.append(joint_nnodes,self.node[node]['nnodes'])
+            joint_n = joint_n + self.node[node]['n']
+
+        # read out info from old nodes and create union / joint
+        joint_Nr = self.node[parent_id]['Nr'][np.ix_(ids,ids)]
+        joint_Er = self.node[parent_id]['Er'][np.ix_(ids,ids)]
+        # print joint_nnodes, ids, joint_Nr
+
+        ##################################################
+        # create new node and insert joint info
+        new_label = self.new_node_generator()
+        new_id = new_label.next()
+        self.add_node(new_id)
+        self.node[new_id]['nnodes'] = joint_nnodes
+        self.node[new_id]['n'] = joint_n
+        self.node[new_id]['Er'] = joint_Er
+        self.node[new_id]['Nr'] = joint_Nr
+
+        # let new node point to old two nodes
+        self.node[new_id]['children'] = node_ids
+        for node in node_ids:
+            self.add_edge(new_id,node)
+
+
+        ##################################################
+        # update parent node info and let it point to new node
+        for node in node_ids:
+            self.remove_edge(parent_id,node)
+        self.add_edge(parent_id,new_id)
+
+        self.node[parent_id]['children']=self.successors(parent_id)
+        self.node[parent_id]['children'].sort()
+        #TODO: update Nr and Er of parent node..
 
 
     """
@@ -182,7 +240,7 @@ class GHRG(nx.DiGraph):
 
 
 def example():
-    D=create2paramGHRG(100,0.2,0.05,2,2)
+    D=create2paramGHRG(100,5,0.05,2,2)
     G=D.generateNetwork()
     return G
 
@@ -205,8 +263,8 @@ def calculateDegrees(cm,ratio,K,ncin=1.):
 Function to create a test GHRG for simulations
 parameters:
     n   : number of nodes
-    p_in    : within community prob
-    p_out   : across community prob
+    cm  : mean degree
+    ratio       : ratio between links inside vs outside
     n_levels    : depth of GHRG
     level_k     : number of groups at each level
 """
@@ -218,6 +276,7 @@ def create2paramGHRG(n,cm,ratio,n_levels,level_k):
         cin,cout=calculateDegrees(cm,ratio,level_k)
         print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
         omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
+        print omega[level]
         cm=cin
 
     D=GHRG()
@@ -229,8 +288,7 @@ def create2paramGHRG(n,cm,ratio,n_levels,level_k):
     #~ D.add_nodes_from(D.network_nodes, leaf=True)
 
     # create root node and store attribues of graph in it
-    # TODO --- len(D) will evaluate to zero here, why write it like this?
-    D.root_node = len(D)
+    D.root_node = 0
     D.add_node(D.root_node, Er=np.zeros((level_k,level_k)), Nr=np.zeros((level_k,level_k)))
     D.node[D.root_node]['nnodes'] = D.network_nodes[:]
     D.node[D.root_node]['n'] = n
