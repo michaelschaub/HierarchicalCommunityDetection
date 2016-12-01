@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 from itertools import izip
+from spectral_algorithms import create_partition_matrix_from_vector
 
 """
 GHRG base class is a networkx DiGraph that stores a dendrogram of the hierarchical model.
@@ -94,7 +95,19 @@ class GHRG(nx.DiGraph):
         # read out info from old nodes and create union / joint
         joint_Nr = self.node[parent_id]['Nr'][np.ix_(ids,ids)]
         joint_Er = self.node[parent_id]['Er'][np.ix_(ids,ids)]
-        # print joint_nnodes, ids, joint_Nr
+
+        old_children = self.node[parent_id]['children']
+        pvec = np.zeros(len(self.node[parent_id]['children']),dtype='int')
+
+        num_new_children = len(old_children) - len(node_ids)
+        k=0
+        for ni, old_child in enumerate(old_children):
+            if old_child in node_ids:
+                pvec[ni] = num_new_children
+            else:
+                pvec[ni] = k
+                k = k+1
+
 
         ##################################################
         # create new node and insert joint info
@@ -120,7 +133,16 @@ class GHRG(nx.DiGraph):
 
         self.node[parent_id]['children']=self.successors(parent_id)
         self.node[parent_id]['children'].sort()
-        #TODO: update Nr and Er of parent node..
+
+        pmatrix = create_partition_matrix_from_vector(pvec).toarray()
+        A = self.node[parent_id]['Nr']
+        A = pmatrix.T.dot(A).dot(pmatrix)
+        self.node[parent_id]['Nr'] = A - np.diag(np.diag(A))
+
+        A = self.node[parent_id]['Er']
+        A = pmatrix.T.dot(A).dot(pmatrix)
+        self.node[parent_id]['Er'] = A - np.diag(np.diag(A))
+
 
 
     """
