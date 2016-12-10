@@ -3,7 +3,8 @@ from GHRGmodel import GHRG
 import spectral_algorithms as spectral
 import metrics
 from matplotlib import pyplot as plt
-import partialpooling as ppool
+#~ import partialpooling as ppool
+import model_selection as ppool
 
 plt.ion()
 
