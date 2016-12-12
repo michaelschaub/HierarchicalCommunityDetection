@@ -11,7 +11,7 @@ plt.ion()
 """
 Test partial pooling
  - input: ratio - ratio of probabilities between on- and off-diagonals
- 
+
  returns:
  -  D_gen - Dendro for generating example
  - D_inferred - inferred Dendro
@@ -21,20 +21,21 @@ def testpp(ratio=0.1):
     cm=20 # degree parameter
     n=1000 #nodes
     n_levels=3 #number of levels generated in GHRG
-    
+
     level_k=2 # number of groups at each level
-    
+
     D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
     G=D_gen.generateNetwork()
     A = D_gen.to_scipy_sparse_matrix(G)
-    
+
     D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
     partitions=np.empty((2,n))
     partitions[0,:] = D_gen.get_lowest_partition()
     partitions[1,:] = D_inferred.get_lowest_partition()
     print "VI", metrics.calcVI(partitions)[0,1]
+    K = partitions[1,:].max().astype('int')
     Di_nodes, Di_edges = D_inferred.construct_full_block_params()
-    mergeList=ppool.createMergeList(Di_edges.flatten(),Di_nodes.flatten())
+    mergeList=ppool.createMergeList(Di_edges.flatten(),Di_nodes.flatten(),K)
     #~ ppool.plotComparison(mcmc)
     #~ ppool.compare(mcmc)
     return D_gen, D_inferred, mergeList

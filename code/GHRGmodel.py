@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 import scipy.sparse
 from itertools import izip
-# from spectral_algorithms import create_partition_matrix_from_vector
+import spectral_algorithms as spectral
 
 """
 GHRG base class is a networkx DiGraph that stores a dendrogram of the hierarchical model.
@@ -355,3 +355,25 @@ def create2paramGHRG(n,cm,ratio,n_levels,level_k):
 
 
     return D
+
+
+
+"""
+fit a GHRG to a graph provided by a networkx network as input
+"""
+#TODO: function to be finalized once mergelist works etc.
+def fitGHRG(input_network):
+    A = input_network.to_scipy_sparse_matrix(input_network)
+
+    D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
+
+    partitions= D_inferred.get_lowest_partition()
+    K = partitions.max().astype('int')
+    Di_nodes, Di_edges = D_inferred.construct_full_block_params()
+    mergeList=ppool.createMergeList(Di_edges.flatten(),Di_nodes.flatten(),K)
+
+
+    for blocks_to_merge in mergeList:
+        D_inferred.insert_hier_merge_node(blocks_to_merge)
+
+    return D_inferred
