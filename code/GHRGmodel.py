@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 import scipy.sparse
 from itertools import izip
-import spectral_algorithms as spectral
+
 
 """
 GHRG base class is a networkx DiGraph that stores a dendrogram of the hierarchical model.
@@ -272,108 +272,4 @@ def create_partition_matrix_from_vector(partition_vec):
     partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
     return partition_matrix
 
-def example():
-    D=create2paramGHRG(100,5,0.05,2,2)
-    G=D.generateNetwork()
-    return G
 
-
-"""
-Calculate in and out block degree parameters for a given mean degree and ratio
-parameters:
-    cm  : mean degree
-    ratio   : cout/cin
-    K   : number of groups
-    ncin    : number of cin blocks per row
-"""
-def calculateDegrees(cm,ratio,K,ncin=1.):
-    cin = (K*cm) / (ncin+(K-ncin)*ratio)
-    cout = cin * ratio
-    return cin,cout
-
-
-"""
-Function to create a test GHRG for simulations
-parameters:
-    n   : number of nodes
-    cm  : mean degree
-    ratio       : ratio between links inside vs outside
-    n_levels    : depth of GHRG
-    level_k     : number of groups at each level
-"""
-def create2paramGHRG(n,cm,ratio,n_levels,level_k):
-
-    #interaction probabilities
-    omega={}
-    for level in xrange(n_levels):
-        cin,cout=calculateDegrees(cm,ratio,level_k)
-        print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
-        omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
-        print omega[level]
-        cm=cin
-
-    D=GHRG()
-
-    #network_nodes contains an ordered list of the network nodes
-    # order is important so that we can efficiently create views at each
-    # internal dendrogram node
-    D.network_nodes = np.arange(n)
-    #~ D.add_nodes_from(D.network_nodes, leaf=True)
-
-    # create root node and store attribues of graph in it
-    D.root_node = 0
-    D.add_node(D.root_node, Er=np.zeros((level_k,level_k)), Nr=np.zeros((level_k,level_k)))
-    D.node[D.root_node]['nnodes'] = D.network_nodes[:]
-    D.node[D.root_node]['n'] = n
-
-    # add root's children
-    nodes_this_level = D.add_children(D.root_node, level_k)
-    #create local view of network node assignment
-    for ci,child in enumerate(nodes_this_level):
-        #~ print child, D.predecessors(child), D.node[D.predecessors(child)[0]]['nnodes'][ci*n/level_k:(ci+1)*n/level_k]
-        D.node[child]['nnodes'] = D.node[D.root_node]['nnodes'][ci*n/level_k:(ci+1)*n/level_k]
-        D.node[child]['n'] = len(D.node[child]['nnodes'])
-
-    #construct dendro breadth first
-    for nl in xrange(n_levels-1):
-        nodes_last_level=list(nodes_this_level)
-        nodes_this_level=[]
-        for parent in nodes_last_level:
-            children=D.add_children(parent, level_k)
-            nodes_this_level.extend(children)
-
-            #create local view of network node assignment
-            level_n=len(D.node[parent]['nnodes'])
-            for ci,child in enumerate(children):
-
-                #~ print child, D.predecessors(child), level_n, D.node[D.predecessors(child)[0]]['nnodes'][ci*level_n/level_k:(ci+1)*level_n/level_k]
-                D.node[child]['nnodes'] = D.node[D.predecessors(child)[0]]['nnodes'][ci*level_n/level_k:(ci+1)*level_n/level_k]
-                D.node[child]['n'] = len(D.node[child]['nnodes'])
-
-    D.setLeafNodeOrder()
-    D.setParameters(omega)
-
-
-    return D
-
-
-
-"""
-fit a GHRG to a graph provided by a networkx network as input
-"""
-#TODO: function to be finalized once mergelist works etc.
-def fitGHRG(input_network):
-    A = input_network.to_scipy_sparse_matrix(input_network)
-
-    D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-
-    partitions= D_inferred.get_lowest_partition()
-    K = partitions.max().astype('int')
-    Di_nodes, Di_edges = D_inferred.construct_full_block_params()
-    mergeList=ppool.createMergeList(Di_edges.flatten(),Di_nodes.flatten(),K)
-
-
-    for blocks_to_merge in mergeList:
-        D_inferred.insert_hier_merge_node(blocks_to_merge)
-
-    return D_inferred
