@@ -1,54 +1,17 @@
 import numpy as np
 from GHRGmodel import GHRG
 import spectral_algorithms as spectral
-import inference as inf
+import inference
 import metrics
 from matplotlib import pyplot as plt
-#~ import partialpooling as ppool
-import model_selection as ppool
 
-plt.ion()
-
-"""
-Test partial pooling
- - input: ratio - ratio of probabilities between on- and off-diagonals
-
- returns:
- -  D_gen - Dendro for generating example
- - D_inferred - inferred Dendro
- - mergeList - list of triples (pairs of blocks to merge and p-value)
-"""
-def testpp(ratio=0.1):
-    cm=20 # degree parameter
-    n=1000 #nodes
-    n_levels=3 #number of levels generated in GHRG
-
-    level_k=2 # number of groups at each level
-
-    D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
-    G=D_gen.generateNetwork()
-    A = D_gen.to_scipy_sparse_matrix(G)
-
-    D_inferred = inf.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-    partitions=np.empty((2,n))
-    partitions[0,:] = D_gen.get_lowest_partition()
-    partitions[1,:] = D_inferred.get_lowest_partition()
-    print "VI", metrics.calcVI(partitions)[0,1]
-    K = partitions[1,:].max().astype('int')
-    Di_nodes, Di_edges = D_inferred.construct_full_block_params()
-    mergeList=ppool.createMergeList(Di_edges.flatten(),Di_nodes.flatten(),K)
-    #~ ppool.plotComparison(mcmc)
-    #~ ppool.compare(mcmc)
-    return D_gen, D_inferred, mergeList
-
-<<<<<<< HEAD
 
 def testModelSelection(max_num_groups=20):
     ratio=0.1
     n_levels=3 #number of levels generated in GHRG
 
     level_k=2 # number of groups at each level
-    
+
     for n in 2**np.arange(8,14):
         for cm in 2**np.arange(2,6):
             for rep in xrange(100):
@@ -67,8 +30,8 @@ def testModelSelection(max_num_groups=20):
                     except:
                         attempts+=1
                         print attempts
-                        
-                    
+
+
                 #~ plt.figure()
                 #~ plt.plot(np.arange(1,max_num_groups),looxv)
                 #~ print looxv
@@ -80,14 +43,12 @@ def testModelSelection(max_num_groups=20):
                 except IndexError:
                     belowzero=20
                 print (looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7)
-                
+
                 with open('res_tms01.txt','a') as f:
-                    f.write('%i\t%i\t%f\t%f\t%i\n' % (n,cm,(looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7) )) 
-    
+                    f.write('%i\t%i\t%f\t%f\t%i\n' % (n,cm,(looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7) ))
 
 
-=======
->>>>>>> 0927e83f34b1749cee959bf7778d2f358b238a0b
+
 """
 Experiment: Test Spectral inference algorithm on hierarchical test graph
 
@@ -118,7 +79,7 @@ def exp1(runs=10):
             A = D_gen.to_scipy_sparse_matrix(G)
 
             #~ try:
-            D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
+            D_inferred = inference.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
 
             partitions=np.empty((2,n))
             partitions[0,:] = D_gen.get_lowest_partition()
@@ -146,61 +107,6 @@ def exp1(runs=10):
 
     return bb_mean, tb_mean, tt_mean
 
-# Still in use somewhere?
-# """
-# Experiment 2
-# """
-# def exp2(runs=10):
-    # cm=20
-    # n=1000
-    # n_levels=3
-    # level_k=2
-    # K=level_k**n_levels
-
-    # ratios=np.arange(0.1,1,0.1)
-
-    # bb_mean=np.zeros(len(ratios))
-    # tt_mean=np.zeros(len(ratios))
-    # tb_mean=np.zeros(len(ratios))
-
-    # run_count=np.ones(len(ratios))*runs
-
-    # for ri,ratio in enumerate(ratios):
-
-        # for run in xrange(runs):
-            # print ratio, run
-            # D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
-            # G=D_gen.generateNetwork()
-            # A = D_gen.to_scipy_sparse_matrix(G)
-
-            # #~ try:
-            # D_inferred = spectral.split_network_hierarchical_by_spectral_partition(A,mode='Bethe',num_groups=-1)
-
-            # partitions=np.empty((2,n))
-            # partitions[0,:] = D_gen.get_lowest_partition()
-            # partitions[1,:] = D_inferred.get_lowest_partition()
-            # bb_mean[ri]+=metrics.calcVI(partitions)[0,1]
-
-            # partitions[1,:] = D_inferred.partition_level(0)
-            # tb_mean[ri]+= metrics.calcVI(partitions)[0,1]
-            # partitions[0,:] = D_gen.partition_level(0)
-            # tt_mean[ri]+= metrics.calcVI(partitions)[0,1]
-            # #~ except:
-                # #~ print 'FAIL'
-                # #~ run_count[ri]-=1
-
-    # tt_mean/=run_count
-    # tb_mean/=run_count
-    # bb_mean/=run_count
-
-    # plt.figure()
-    # plt.plot(ratios,bb_mean)
-    # plt.plot(ratios,tb_mean)
-    # plt.plot(ratios,tt_mean)
-
-    # plt.legend(['low-low','high-low', 'high-high'])
-
-    # return bb_mean, tb_mean, tt_mean
 
 """
 Calculate in and out block degree parameters for a given mean degree and ratio
