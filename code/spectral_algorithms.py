@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import division
 import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg as linalg
@@ -17,6 +18,7 @@ def spectral_partition(A, mode='Lap', num_groups=2):
 
             Output: partition_vec -- clustering of the nodes
     """
+
     if   mode == "Lap":
         partition = regularized_laplacian_spectral_clustering(A,num_groups=num_groups)
 
@@ -45,17 +47,14 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     # check if tau regularisation parameter is specified otherwise go for mean degree...
     if tau==-1:
         # set tau to average degree
-        #~ tau = np.sum(A)/float(A.shape[0])
         tau = A.sum()/float(A.shape[0])
 
-    #~ Dtau = np.diagflat(np.sum(A,axis=1)) + tau*np.eye(A.shape[0])
+
 
     #~ Dtau_sqrt_inv = scipy.linalg.solve(np.sqrt(Dtau),np.eye(A.shape[0]))
     Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(A.sum(1)).flatten() + tau,-.5),0)
     L = Dtau_sqrt_inv.dot(A).dot(Dtau_sqrt_inv)
 
-    #~ # make L sparse to be used within the 'eigs' routine
-    #~ L = scipy.sparse.coo_matrix(L)
 
     # compute eigenvalues and eigenvectors (sorted according to smallest magnitude first)
     ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='LM')
@@ -65,7 +64,6 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     clust = KMeans(n_clusters = num_groups)
     clust.fit(X)
     partition_vector = clust.labels_
-    #~ print partition_vector
 
 
     return partition_vector
@@ -79,6 +77,10 @@ def build_BetheHessian(A, r):
     Construct Standard Bethe Hessian as discussed, e.g., in Saade et al
     B = (r^2-1)*I-r*A+D
     """
+    if ~scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+
     d = A.sum(axis=1).getA().flatten().astype(float)
     B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0)
     return B
@@ -86,9 +88,31 @@ def build_BetheHessian(A, r):
 
 def build_weighted_BetheHessian(A,r):
     """
-    Construct weigthed Bethe Hessian as discussed in Saade et al. TODO
+    Construct weigthed Bethe Hessian as discussed in Saade et al.
     """
-    pass
+    if ~scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+
+    # we are only interested in A^.2 (elementwise)
+    A2data = A.data **2
+
+    new_data = A2data / (r*r -A2data)
+    A2 = scipy.sparse.csr_matrix((new_data,A.nonzero()),shape=A.shape)
+
+    # diagonal matrix
+    d = 1 + A2.sum(axis=1)
+    d = d.getA().flatten()
+    DD = scipy.sparse.diags(d,0)
+
+    # second matrix
+    rA_data = r*A.data / (r*r - A2data)
+    rA = scipy.sparse.csr_matrix((rA_data,A.nonzero()))
+
+    # full Bethe Hessian
+    BHw = DD - rA
+    return BHw
+
 
 def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
     """
@@ -150,31 +174,52 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
 
     return partition_vector
 
+##########################################
+# NON-BACKTRACKING matrix
+##########################################
+
+def build_non_backtracking_matrix(A,mode='unweighted'):
+    """Build non-backtracking matrix as defined in Krzakala et al 2013:
+    Starting from a similarity matrix (adjacency) matrix s(u,v), we have
+         B(u>v;w>x) = s(u,v) if v = w and u != x, and 0 otherwise
+            (weighted_end setting, column weighting)
+         B(u>v;w>x) = s(w,x) if v = w and u != x, and 0 otherwise
+            (weighted_start setting, row weighting)
+    """
+    if ~scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+
+    edgelist = A.nonzero()
+    weights = A.data
+    number_edges = weights.size
+
+    start_node = edgelist[0]
+    end_node = edgelist[1]
+
+    NodeToEdgeIncidenceMatrixStart = scipy.sparse.csr_matrix((np.ones_like(start_node),(start_node,np.arange(number_edges))))
+    NodeToEdgeIncidenceMatrixEnd =  scipy.sparse.csr_matrix((np.ones_like(end_node),(end_node,np.arange(number_edges))))
+
+    # Line Graph connecting all edge points with start points
+    BT = NodeToEdgeIncidenceMatrixEnd.T*NodeToEdgeIncidenceMatrixStart
+
+    # Backtracking links are the only ones that are symmetric
+    BT = BT - BT.multiply(BT.T)
+
+    if mode == 'weighted_start':
+        BT = scipy.sparse.diags(weights,0)*BT
+    elif mode == 'weighted_end':
+        BT = BT*scipy.sparse.diags(weights,0)
+    elif mode != 'unweighted':
+        print "no valid mode specified"
+        return -1
+
+    return BT
+
+
 #######################################################
 # HELPER FUNCTIONS
 #######################################################
-def create_partition_matrix_from_vector(partition_vec):
-    """
-    Create a partition indicator matrix from a given vector; -1 entries in partition vector will
-    be ignored and can be used to denote unasigned nodes.
-    """
-    nr_nodes = partition_vec.size
-    k=len(np.unique(partition_vec))
-
-    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
-    return partition_matrix
-
-def build_projector_matrix(pvector):
-    """
-    Build a projection matrix onto the space spanned by the partition indicator matrix as
-    described by the input vector
-    """
-    Htemp = create_partition_matrix_from_vector(pvector)
-    D = Htemp.T.dot(Htemp)
-    P = Htemp.dot(scipy.sparse.linalg.spsolve(D,Htemp.T))
-    return P
-
-
 def find_negative_eigenvectors(M):
     """
     Given a matrix M, find all the eigenvectors associated to negative eigenvalues
