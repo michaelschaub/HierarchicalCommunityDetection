@@ -175,7 +175,10 @@ class GHRG(nx.DiGraph):
                     childj=self.node[v]
                 alpha=np.ones(Nr[ci,cj])+self.node[v]['Er'][ci,cj]
                 beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-self.node[v]['Er'][ci,cj])
-                p = np.random.beta(alpha,beta)
+                try:
+                    p = np.random.beta(alpha,beta)
+                except ValueError:
+                    print alpha, beta, fail
                 edges= (np.random.rand(int(Nr[ci,cj])) < p).reshape((childi['n'],childj['n'])).nonzero()
                 G.add_edges_from(zip(childi['nnodes'][edges[0]],childj['nnodes'][edges[1]]))
 

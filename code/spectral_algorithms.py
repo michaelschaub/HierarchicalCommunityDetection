@@ -2,6 +2,7 @@
 from __future__ import division
 import numpy as np
 import scipy.sparse
+import scipy.sparse.linalg as linalg
 import networkx as nx
 from sklearn.cluster import KMeans
 from sklearn import preprocessing
@@ -26,6 +27,9 @@ def spectral_partition(A, mode='Lap', num_groups=2):
 
     elif mode == "NonBack":
         pass
+        
+    else:
+        raise ValueError("mode '%s' not recognised - available modes are 'Lap', Bethe', or 'NonBack'" % mode)
 
     return partition
 
@@ -40,20 +44,17 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     regularized adjacency matrix (called Laplacian by Rohe et al)
     """
 
-    #TODO: adjust for sparse matrices
-
     # check if tau regularisation parameter is specified otherwise go for mean degree...
     if tau==-1:
         # set tau to average degree
         tau = A.sum()/float(A.shape[0])
 
-    Dtau = np.diagflat(A.sum(axis=1) + tau*np.eye(A.shape[0]))
 
-    Dtau_sqrt_inv = scipy.linalg.solve(np.sqrt(Dtau),np.eye(A.shape[0]))
+
+    #~ Dtau_sqrt_inv = scipy.linalg.solve(np.sqrt(Dtau),np.eye(A.shape[0]))
+    Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(A.sum(1)).flatten() + tau,-2),0)
     L = Dtau_sqrt_inv.dot(A).dot(Dtau_sqrt_inv)
 
-    # make L sparse to be used within the 'eigs' routine
-    L = scipy.sparse.coo_matrix(L)
 
     # compute eigenvalues and eigenvectors (sorted according to smallest magnitude first)
     ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='LM')
@@ -63,7 +64,6 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     clust = KMeans(n_clusters = num_groups)
     clust.fit(X)
     partition_vector = clust.labels_
-    print partition_vec
 
 
     return partition_vector

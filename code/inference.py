@@ -1,7 +1,9 @@
 from GHRGmodel import GHRG
 import spectral_algorithms as spectral
+import model_selection
 import numpy as np
 import scipy
+from itertools import izip
 
 def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, max_depth=3):
     """ Recursively split graph into pieces by employing a spectral clustering strategy.
@@ -66,7 +68,7 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
 
 
             # cluster subgraph recursively
-            partition = spectral.spectral_partition(Asub, mode=mode, num_groups=num_groups)
+            partition = spectral_partition(Asub, mode=mode, num_groups=num_groups)
             # print "PARTITION"
             # print partition
 
@@ -97,6 +99,23 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
         hier_depth +=1
 
     return Dendro
+
+
+
+def infer_spectral_blockmodel(A, mode='Lap', max_num_groups=None):
+    if max_num_groups is None:
+        max_num_groups=A.shape[0]
+    
+    looxv=np.empty(max_num_groups-1)
+    
+    for k in xrange(1,max_num_groups):
+        partition = spectral.spectral_partition(A, mode=mode, num_groups=k)
+        
+        E_rs, N_rs = compute_number_links_between_groups(A,partition)
+        
+        looxv[k-1] = sum(model_selection.looxv(Er,Nr) for Er, Nr in izip(E_rs.flatten(),N_rs.flatten()))
+    return looxv
+    
 
 #######################################################
 # HELPER FUNCTIONS
