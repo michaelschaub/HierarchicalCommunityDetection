@@ -79,7 +79,7 @@ def build_BetheHessian(A, r):
     """
     if ~scipy.sparse.issparse(A):
         print "Input matrix not in sparse format, transforming to sparse matrix"
-        A = scipy.sparse.csc_matrix(A)
+        A = scipy.sparse.csr_matrix(A)
 
     d = A.sum(axis=1).getA().flatten().astype(float)
     B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0)
@@ -92,7 +92,7 @@ def build_weighted_BetheHessian(A,r):
     """
     if ~scipy.sparse.issparse(A):
         print "Input matrix not in sparse format, transforming to sparse matrix"
-        A = scipy.sparse.csc_matrix(A)
+        A = scipy.sparse.csr_matrix(A)
 
     # we are only interested in A^.2 (elementwise)
     A2data = A.data **2
@@ -173,6 +173,49 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
     partition_vector = clust.labels_
 
     return partition_vector
+
+##########################################
+# NON-BACKTRACKING matrix
+##########################################
+
+def build_non_backtracking_matrix(A,mode='unweighted'):
+    """Build non-backtracking matrix as defined in Krzakala et al 2013:
+    Starting from a similarity matrix (adjacency) matrix s(u,v), we have
+         B(u>v;w>x) = s(u,v) if v = w and u != x, and 0 otherwise
+            (weighted_end setting, column weighting)
+         B(u>v;w>x) = s(w,x) if v = w and u != x, and 0 otherwise
+            (weighted_start setting, row weighting)
+    """
+    if ~scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+
+    edgelist = A.nonzero()
+    weights = A.data
+    number_edges = weights.size
+
+    start_node = edgelist[0]
+    end_node = edgelist[1]
+
+    NodeToEdgeIncidenceMatrixStart = scipy.sparse.csr_matrix((np.ones_like(start_node),(start_node,np.arange(number_edges))))
+    NodeToEdgeIncidenceMatrixEnd =  scipy.sparse.csr_matrix((np.ones_like(end_node),(end_node,np.arange(number_edges))))
+
+    # Line Graph connecting all edge points with start points
+    BT = NodeToEdgeIncidenceMatrixEnd.T*NodeToEdgeIncidenceMatrixStart
+
+    # Backtracking links are the only ones that are symmetric
+    BT = BT - BT.multiply(BT.T)
+
+    if mode == 'weighted_start':
+        BT = scipy.sparse.diags(weights,0)*BT
+    elif mode == 'weighted_end':
+        BT = BT*scipy.sparse.diags(weights,0)
+    elif mode != 'unweighted':
+        print "no valid mode specified"
+        return -1
+
+    return BT
+
 
 #######################################################
 # HELPER FUNCTIONS
