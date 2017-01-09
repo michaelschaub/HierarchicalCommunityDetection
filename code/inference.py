@@ -1,5 +1,7 @@
 from GHRGmodel import GHRG
 import spectral_algorithms as spectral
+import numpy as np
+import scipy
 
 def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, max_depth=3):
     """ Recursively split graph into pieces by employing a spectral clustering strategy.
@@ -64,7 +66,7 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
 
 
             # cluster subgraph recursively
-            partition = spectral_partition(Asub, mode=mode, num_groups=num_groups)
+            partition = spectral.spectral_partition(Asub, mode=mode, num_groups=num_groups)
             # print "PARTITION"
             # print partition
 
@@ -115,6 +117,19 @@ def compute_number_links_between_groups(A,partition_vec):
     possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
 
     return links_between_groups, possible_links_between_groups
+
+def create_partition_matrix_from_vector(partition_vec):
+    """
+    Create a partition indicator matrix from a given vector; -1 entries in partition vector will
+    be ignored and can be used to denote unasigned nodes.
+    """
+    nr_nodes = partition_vec.size
+    k=len(np.unique(partition_vec))
+
+    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
+    return partition_matrix
+
+
 
 # Still in use somewhere???
 # def split_network_hierarchical_by_spectral_partition(A, mode='Lap', num_groups=2):

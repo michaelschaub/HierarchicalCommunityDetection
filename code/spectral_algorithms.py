@@ -220,28 +220,6 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 #######################################################
 # HELPER FUNCTIONS
 #######################################################
-def create_partition_matrix_from_vector(partition_vec):
-    """
-    Create a partition indicator matrix from a given vector; -1 entries in partition vector will
-    be ignored and can be used to denote unasigned nodes.
-    """
-    nr_nodes = partition_vec.size
-    k=len(np.unique(partition_vec))
-
-    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
-    return partition_matrix
-
-def build_projector_matrix(pvector):
-    """
-    Build a projection matrix onto the space spanned by the partition indicator matrix as
-    described by the input vector
-    """
-    Htemp = create_partition_matrix_from_vector(pvector)
-    D = Htemp.T.dot(Htemp)
-    P = Htemp.dot(scipy.sparse.linalg.spsolve(D,Htemp.T))
-    return P
-
-
 def find_negative_eigenvectors(M):
     """
     Given a matrix M, find all the eigenvectors associated to negative eigenvalues

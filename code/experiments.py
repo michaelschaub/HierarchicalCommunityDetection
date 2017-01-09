@@ -1,10 +1,9 @@
 import numpy as np
 from GHRGmodel import GHRG
 import spectral_algorithms as spectral
+import inference as inf
 import metrics
 from matplotlib import pyplot as plt
-#~ import partialpooling as ppool
-import model_selection as ppool
 
 plt.ion()
 
@@ -28,7 +27,7 @@ def testpp(ratio=0.1):
     G=D_gen.generateNetwork()
     A = D_gen.to_scipy_sparse_matrix(G)
 
-    D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
+    D_inferred = inf.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
     partitions=np.empty((2,n))
     partitions[0,:] = D_gen.get_lowest_partition()
     partitions[1,:] = D_inferred.get_lowest_partition()
@@ -41,7 +40,10 @@ def testpp(ratio=0.1):
     return D_gen, D_inferred, mergeList
 
 """
-Experiment 1
+Experiment: Test Spectral inference algorithm on hierarchical test graph
+
+Create a sequence of test graphs (realizations of a specified hier. random model) and try
+to infer the true partition using spectral methods
 """
 def exp1(runs=10):
     cm=20
@@ -62,12 +64,14 @@ def exp1(runs=10):
 
         for run in xrange(runs):
             print ratio, run
+
+            # create random model and transform
             D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
             G=D_gen.generateNetwork()
             A = D_gen.to_scipy_sparse_matrix(G)
 
             #~ try:
-            D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
+            D_inferred = inf.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
 
             partitions=np.empty((2,n))
             partitions[0,:] = D_gen.get_lowest_partition()
