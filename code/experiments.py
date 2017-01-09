@@ -44,21 +44,30 @@ def testpp(ratio=0.1):
 
 def testModelSelection(max_num_groups=20):
     ratio=0.1
+    n_levels=3 #number of levels generated in GHRG
+
+    level_k=2 # number of groups at each level
     
-    for n in 2**np.arange(7,14):
-        for cm in 2**np.arange(2,7):
+    for n in 2**np.arange(8,14):
+        for cm in 2**np.arange(2,6):
             for rep in xrange(100):
                 print n,cm, rep
                 #~ cm=20 # degree parameter
                 #~ n=1000 #nodes
-                n_levels=3 #number of levels generated in GHRG
-
-                level_k=2 # number of groups at each level
-
-                D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
-                G=D_gen.generateNetwork()
-                A = D_gen.to_scipy_sparse_matrix(G)
-                looxv=inference.infer_spectral_blockmodel(A, max_num_groups=max_num_groups)/float(n)
+                failed=True
+                attempts=0
+                while failed:
+                    try:
+                        D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
+                        G=D_gen.generateNetwork()
+                        A = D_gen.to_scipy_sparse_matrix(G)
+                        looxv=inference.infer_spectral_blockmodel(A, max_num_groups=max_num_groups)/float(n)
+                        failed=False
+                    except:
+                        attempts+=1
+                        print attempts
+                        
+                    
                 #~ plt.figure()
                 #~ plt.plot(np.arange(1,max_num_groups),looxv)
                 #~ print looxv
@@ -72,7 +81,7 @@ def testModelSelection(max_num_groups=20):
                 print (looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7)
                 
                 with open('res_tms01.txt','a') as f:
-                    f.write('%i %i %f %f %i \n' % (n,cm,(looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7) )) 
+                    f.write('%i\t%i\t%f\t%f\t%i\n' % (n,cm,(looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7) )) 
     
 
 

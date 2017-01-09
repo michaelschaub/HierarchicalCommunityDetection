@@ -51,7 +51,7 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     #~ Dtau = np.diagflat(np.sum(A,axis=1)) + tau*np.eye(A.shape[0])
 
     #~ Dtau_sqrt_inv = scipy.linalg.solve(np.sqrt(Dtau),np.eye(A.shape[0]))
-    Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(A.sum(1)).flatten() + tau,-2),0)
+    Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(A.sum(1)).flatten() + tau,-.5),0)
     L = Dtau_sqrt_inv.dot(A).dot(Dtau_sqrt_inv)
 
     #~ # make L sparse to be used within the 'eigs' routine
