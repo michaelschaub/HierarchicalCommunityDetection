@@ -15,7 +15,7 @@ def looxv(Er,Nr,a=1.,b=1.):
     
     if not np.isfinite(lxv):
         print Er,Nr,Nr*betaln(Er+a, Nr-Er+b), Er*betaln(Er+a-1, Nr-Er+b), (Nr-Er)*betaln(Er+a, Nr-Er+b-1)
-        print adad
+        print fail
     
     return lxv
 
