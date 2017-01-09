@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import division
 import numpy as np
 import scipy.sparse
 import networkx as nx
@@ -39,12 +40,14 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     regularized adjacency matrix (called Laplacian by Rohe et al)
     """
 
+    #TODO: adjust for sparse matrices
+
     # check if tau regularisation parameter is specified otherwise go for mean degree...
     if tau==-1:
         # set tau to average degree
-        tau = np.sum(A)/float(A.shape[0])
+        tau = A.sum()/float(A.shape[0])
 
-    Dtau = np.diagflat(np.sum(A,axis=1)) + tau*np.eye(A.shape[0])
+    Dtau = np.diagflat(A.sum(axis=1) + tau*np.eye(A.shape[0]))
 
     Dtau_sqrt_inv = scipy.linalg.solve(np.sqrt(Dtau),np.eye(A.shape[0]))
     L = Dtau_sqrt_inv.dot(A).dot(Dtau_sqrt_inv)
@@ -74,6 +77,10 @@ def build_BetheHessian(A, r):
     Construct Standard Bethe Hessian as discussed, e.g., in Saade et al
     B = (r^2-1)*I-r*A+D
     """
+    if ~scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csc_matrix(A)
+
     d = A.sum(axis=1).getA().flatten().astype(float)
     B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0)
     return B
@@ -81,9 +88,31 @@ def build_BetheHessian(A, r):
 
 def build_weighted_BetheHessian(A,r):
     """
-    Construct weigthed Bethe Hessian as discussed in Saade et al. TODO
+    Construct weigthed Bethe Hessian as discussed in Saade et al.
     """
-    pass
+    if ~scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csc_matrix(A)
+
+    # we are only interested in A^.2 (elementwise)
+    A2data = A.data **2
+
+    new_data = A2data / (r*r -A2data)
+    A2 = scipy.sparse.csr_matrix((new_data,A.nonzero()),shape=A.shape)
+
+    # diagonal matrix
+    d = 1 + A2.sum(axis=1)
+    d = d.getA().flatten()
+    DD = scipy.sparse.diags(d,0)
+
+    # second matrix
+    rA_data = r*A.data / (r*r - A2data)
+    rA = scipy.sparse.csr_matrix((rA_data,A.nonzero()))
+
+    # full Bethe Hessian
+    BHw = DD - rA
+    return BHw
+
 
 def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
     """
