@@ -137,8 +137,8 @@ def compute_number_links_between_groups(A,partition_vec,mode='undirected'):
 
     # diagonal block has to be treated differently if we are dealing with an undirected network!
     if mode=='undirected':
-        links_between_groups = links_between_groups - np.diag(np.diag(links_between_groups))
-        possible_links_between_groups = possible_links_between_groups - np.diag(np.diag(possible_links_between_groups))
+        links_between_groups = links_between_groups - 0.5*np.diag(np.diag(links_between_groups))
+        possible_links_between_groups = possible_links_between_groups - 0.5*np.diag(np.diag(possible_links_between_groups))
 
     return links_between_groups, possible_links_between_groups
 
