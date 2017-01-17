@@ -120,10 +120,10 @@ def infer_spectral_blockmodel(A, mode='Lap', max_num_groups=None):
 #######################################################
 # HELPER FUNCTIONS
 #######################################################
-def compute_number_links_between_groups(A,partition_vec):
+def compute_number_links_between_groups(A,partition_vec,mode='undirected'):
     """
     Compute the number of possible and actual links between the groups indicated in the
-    partition vector
+    partition vector.
     """
 
     pmatrix = create_partition_matrix_from_vector(partition_vec)
@@ -134,6 +134,11 @@ def compute_number_links_between_groups(A,partition_vec):
 
     nodes_per_group = pmatrix.sum(0).getA()
     possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
+
+    # diagonal block has to be treated differently if we are dealing with an undirected network!
+    if mode=='undirected':
+        links_between_groups = links_between_groups - np.diag(np.diag(links_between_groups))
+        possible_links_between_groups = possible_links_between_groups - np.diag(np.diag(possible_links_between_groups))
 
     return links_between_groups, possible_links_between_groups
 
