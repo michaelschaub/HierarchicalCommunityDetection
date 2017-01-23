@@ -62,9 +62,6 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
             subpart = Dendro.node[node]['nnodes']
             Asub = A[subpart,:]
             Asub = Asub[:,subpart]
-            # print Asub
-            # print "SUBPART"
-            # print subpart
 
 
             # cluster subgraph recursively
@@ -120,7 +117,7 @@ def infer_spectral_blockmodel(A, mode='Lap', max_num_groups=None):
 #######################################################
 # HELPER FUNCTIONS
 #######################################################
-def compute_number_links_between_groups(A,partition_vec,mode='undirected'):
+def compute_number_links_between_groups(A,partition_vec):
     """
     Compute the number of possible and actual links between the groups indicated in the
     partition vector.
@@ -130,15 +127,19 @@ def compute_number_links_between_groups(A,partition_vec,mode='undirected'):
     # number of columns is number of groups
     nr_groups = pmatrix.shape[1]
 
-    links_between_groups = pmatrix.T.dot(A).dot(pmatrix).toarray()
+    if not scipy.sparse.issparse(A):
+        A = scipy.mat(A)
 
-    nodes_per_group = pmatrix.sum(0).getA()
+    # all inputs are matrices here -- calculation works accordingly and transforms to
+    # array only afterwards
+    # each block counts the number of half links / directed links
+    links_between_groups = pmatrix.T * A * pmatrix
+    links_between_groups = links_between_groups.A
+
+    # convert to array type first, before performing outer product
+    nodes_per_group = pmatrix.sum(0).A
     possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
 
-    # diagonal block has to be treated differently if we are dealing with an undirected network!
-    if mode=='undirected':
-        links_between_groups = links_between_groups - 0.5*np.diag(np.diag(links_between_groups))
-        possible_links_between_groups = possible_links_between_groups - 0.5*np.diag(np.diag(possible_links_between_groups))
 
     return links_between_groups, possible_links_between_groups
 

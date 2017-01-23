@@ -1,3 +1,4 @@
+from __future__ import division
 import networkx as nx
 import numpy as np
 import scipy.sparse
@@ -135,6 +136,7 @@ class GHRG(nx.DiGraph):
         self.node[parent_id]['children']=self.successors(parent_id)
         self.node[parent_id]['children'].sort()
 
+        # Check if this is doing the correct agglomeration here.
         pmatrix = create_partition_matrix_from_vector(pvec).toarray()
         A = self.node[parent_id]['Nr']
         A = pmatrix.T.dot(A).dot(pmatrix)
@@ -147,7 +149,8 @@ class GHRG(nx.DiGraph):
 
 
     """
-    Function to identify leaf nodes (i.e. dendro nodes with no children)
+    Function to identify and store leaf nodes (i.e. dendro nodes with no children) in
+    internal data structure
     """
     def setLeafNodeOrder(self):
         self.leaf_nodes = [v for v in nx.dfs_preorder_nodes(self,self.root_node) if self.out_degree(v)==0]
@@ -155,6 +158,7 @@ class GHRG(nx.DiGraph):
     """
     Function to generate networks from the model
     """
+    #TODO: DEPRECATED -- there is something wrong here!
     def generateNetwork(self):
         """
         Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
@@ -180,6 +184,51 @@ class GHRG(nx.DiGraph):
                 except ValueError:
                     print alpha, beta, fail
                 edges= (np.random.rand(int(Nr[ci,cj])) < p).reshape((childi['n'],childj['n'])).nonzero()
+                G.add_edges_from(zip(childi['nnodes'][edges[0]],childj['nnodes'][edges[1]]))
+
+        #remove self loops
+        G.remove_edges_from(G.selfloop_edges())
+        return G
+
+    """
+    Function to generate networks from the model
+    """
+    def generateNetworkExactProb(self,mode='Undirected'):
+        """
+        Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
+        probability of connection with other blocks by working up to the root of the tree.
+        """
+        if mode == 'Undirected':
+            G=nx.Graph()
+        else:
+            error('directed case not defined yet')
+
+        #cycle through nodes and generate edges
+        for v in self.nodes_iter():
+            children=self.node[v]['children']
+            Nr=self.node[v]['Nr']
+            Er=self.node[v]['Er']
+            if mode=='Undirected':
+                Nr = np.triu(Nr)
+                Er = np.triu(Er)
+
+            for ci,cj in izip(*Nr.nonzero()):
+                try:
+                    childi=self.node[children[ci]]
+                    childj=self.node[children[cj]]
+                except IndexError:      # if it is a leaf node
+                    childi=self.node[v]
+                    childj=self.node[v]
+                try:
+                    p = Er[ci,cj]/Nr[ci,cj]
+                    # print "Probability"
+                    # print p
+                except ValueError:
+                    print "Something went wrong when sampling from the model"
+                edges = (np.random.rand(int(Nr[ci,cj])) < p).reshape((childi['n'],childj['n']))
+                if ci == cj:
+                    edges = np.triu(edges)
+                edges = edges.nonzero()
                 G.add_edges_from(zip(childi['nnodes'][edges[0]],childj['nnodes'][edges[1]]))
 
         #remove self loops
