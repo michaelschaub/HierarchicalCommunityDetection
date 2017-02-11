@@ -7,12 +7,14 @@ import networkx as nx
 from sklearn.cluster import KMeans
 from sklearn import preprocessing
 from matplotlib import pyplot as plt
+from scipy.sparse.linalg import LinearOperator
 
 
 def spectral_partition(A, mode='Lap', num_groups=2):
     """ Perform one round of spectral clustering for a given network matrix A
     Inputs: A -- input adjacency matrix
-            mode -- variant of spectral clustering to use (reg. Laplacian, Bethe Hessian, Non-Backtracking)
+            mode -- variant of spectral clustering to use (Laplacian, Bethe Hessian,
+            Non-Backtracking, XLaplacian, ...)
             num_groups -- in how many groups do we want to split the graph?
             (default: 2; set to -1 to infer number of groups from spectrum)
 
@@ -20,13 +22,23 @@ def spectral_partition(A, mode='Lap', num_groups=2):
     """
 
     if   mode == "Lap":
-        partition, _ = regularized_laplacian_spectral_clustering(A,num_groups=num_groups)
+        if num_groups != -1:
+            partition, _ = regularized_laplacian_spectral_clustering(A,num_groups=num_groups)
 
     elif mode == "Bethe":
         partition = cluster_with_BetheHessian(A,num_groups=num_groups)
 
     elif mode == "NonBack":
         pass
+
+    elif mode == "XLaplacian":
+        pass
+
+    elif mode == "SeidelLap":
+        if num_groups != -1:
+            partition, _ = cluster_with_SLaplacian_simple(A,num_groups=num_groups)
+        else:
+            pass
 
     else:
         raise ValueError("mode '%s' not recognised - available modes are 'Lap', Bethe', or 'NonBack'" % mode)
@@ -45,17 +57,19 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     regularized adjacency matrix (called Laplacian by Rohe et al)
     """
 
+    A = test_sparse_and_transform(A)
+
     # check if tau regularisation parameter is specified otherwise go for mean degree...
     if tau==-1:
         # set tau to average degree
         tau = A.sum()/A.shape[0]
 
-
-    Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(A.sum(1)).flatten() + tau,-.5),0)
+    d = np.array(A.sum(axis=1)).flatten().astype(float)
+    Dtau_sqrt_inv = scipy.sparse.diags(np.power(d + tau,-.5),0)
     L = Dtau_sqrt_inv.dot(A).dot(Dtau_sqrt_inv)
 
 
-    # compute eigenvalues and eigenvectors (sorted according to smallest magnitude first)
+    # compute eigenvalues and eigenvectors (sorted according to magnitude first)
     ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='LM')
 
     X = preprocessing.normalize(evecs, axis=1, norm='l2')
@@ -76,9 +90,7 @@ def build_BetheHessian(A, r):
     Construct Standard Bethe Hessian as discussed, e.g., in Saade et al
     B = (r^2-1)*I-r*A+D
     """
-    if not scipy.sparse.issparse(A):
-        print "Input matrix not in sparse format, transforming to sparse matrix"
-        A = scipy.sparse.csr_matrix(A)
+    A = test_sparse_and_transform(A)
 
     d = A.sum(axis=1).getA().flatten().astype(float)
     B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0)
@@ -93,7 +105,7 @@ def build_weighted_BetheHessian(A,r):
         print "Input matrix not in sparse format, transforming to sparse matrix"
         A = scipy.sparse.csr_matrix(A)
 
-    # we are only interested in A^.2 (elementwise)
+    # we are interested in A^.2 (elementwise)
     A2data = A.data **2
 
     new_data = A2data / (r*r -A2data)
@@ -147,7 +159,6 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
 
         relevant_ev, _ = find_negative_eigenvectors(BH_neg)
         X = np.hstack([X, relevant_ev])
-        #TODO: check if we want to sort here as well?!
         num_groups = X.shape[1]
 
         if num_groups == 0:
@@ -169,7 +180,46 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
     clust.fit(X)
     partition_vector = clust.labels_
 
+
     return partition_vector
+
+##########################################
+# SEIDEL LAPLACIAN
+##########################################
+def create_seidel_lap_operator(A,rho=None):
+    if not scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+
+    n = A.shape[0]
+    I = scipy.sparse.diags(np.ones(n),0)
+    d = A.sum(axis=1).A.flatten().astype(float)
+    if rho==None:
+        rho = d.mean()/n
+    dtot = d*(1-rho) + rho * (n-1)
+    Ds_invs = scipy.sparse.diags(np.power(dtot,-0.5),0)
+
+    def seidel_lap_mat_vec(x):
+        mv = x - (1+rho)*Ds_invs*A*Ds_invs*x - rho*Ds_invs*Ds_invs*x
+        mv += Ds_invs*scipy.ones(n)*(scipy.ones(n)*Ds_invs*x)
+        return mv
+
+    LS = LinearOperator((n,n),matvec=seidel_lap_mat_vec)
+    return LS
+
+def cluster_with_SLaplacian_simple(A,num_groups,rho=None):
+    # compute eigenvalues and eigenvectors (sorted according to smallest)
+    # TODO: make selection based on eigenvectors
+    L = create_seidel_lap_operator(A)
+    ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='SA')
+
+    clust = KMeans(n_clusters = num_groups)
+    clust.fit(evecs)
+    partition_vector = clust.labels_
+
+    return partition_vector, evecs
+
+
 
 ##########################################
 # NON-BACKTRACKING matrix
@@ -230,7 +280,7 @@ def find_relevant_eigenvectors_Gaussian(Omega):
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
-def identify_hierarchy_in_affinity_matrix_DCSBM(Omega,mode='DCSBM',reg=True):
+def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
 
     max_k = Omega.shape[0]
     best_k = max_k
@@ -252,27 +302,42 @@ def identify_hierarchy_in_affinity_matrix_DCSBM(Omega,mode='DCSBM',reg=True):
     ev, evecs = scipy.linalg.eigh(L)
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
-    # print L
+    print "START AGGLOMERATION"
+    print "evec_sorted"
+    print evecs
 
+    #TODO: 2x2 case needs to be handled separately!
     for k in xrange(max_k-1,0,-1):
         if mode == 'DCSBM':
             V = evecs[:,:k]
-            # print V
+            print "V"
+            print V
             X = preprocessing.normalize(V, axis=1, norm='l2')
             clust = KMeans(n_clusters = k)
             clust.fit(X)
             partition_vec = clust.labels_
             partition_vec = relabel_partition_vec(partition_vec)
-            # print partition_vec
+            print partition_vec
 
             H = create_partition_matrix_from_vector(partition_vec)
-            # Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
-            H = Dtau_sqrt_inv.dot(H)
+            Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
+            H = Dtau_sqrt.dot(H)
             H = preprocessing.normalize(H,axis=0,norm='l2')
 
         elif mode == 'SBM':
-            pass
-            #TODO: corresponding SBM version of reg. clustering
+            V = evecs[:,:k]
+            print "V"
+            print V
+            X = preprocessing.normalize(V, axis=1, norm='l2')
+            clust = KMeans(n_clusters = k)
+            clust.fit(X)
+            partition_vec = clust.labels_
+            partition_vec = relabel_partition_vec(partition_vec)
+            print partition_vec
+
+            H = create_partition_matrix_from_vector(partition_vec)
+            H = Dtau_sqrt_inv.dot(H)
+            H = preprocessing.normalize(H,axis=0,norm='l2')
         else:
             error('something went wrong. please specify valid mode')
 
@@ -281,7 +346,8 @@ def identify_hierarchy_in_affinity_matrix_DCSBM(Omega,mode='DCSBM',reg=True):
         norm1 = scipy.linalg.norm(proj1)
         norm2 = scipy.linalg.norm(proj2)
         error = 0.5*(norm1+norm2)
-        # print k, error
+        print "K, error: "
+        print k, error
         # Note that this should always be fulfilled at k=1
         if error < 0.01*max_k:
             return k, partition_vec, H, error
@@ -293,16 +359,20 @@ def project_orthogonal_to(subspace_basis,vectors_to_project):
     vectors_to_project: project these vectors into the orthogonal complement of the
     specified subspace
     """
-    if scipy.sparse.issparse(vectors_to_project):
-        vectors_to_project = vectors_to_project.toarray()
-    projected = subspace_basis.T.dot(vectors_to_project)
-    normalization = subspace_basis.T.dot(subspace_basis)
-    if scipy.sparse.issparse(normalization):
-        normalization  = normalization.toarray()
-    normalization_inv = scipy.linalg.solve(normalization,scipy.eye(normalization.shape[1]))
-    projected = subspace_basis.dot(normalization_inv.dot(projected))
+    if not scipy.sparse.issparse(vectors_to_project):
+        V = np.matrix(vectors_to_project)
+    else:
+        V = vectors_to_project
 
-    orthogonal_proj = vectors_to_project - projected
+    if not scipy.sparse.issparse(subspace_basis):
+        S = np.matrix(subspace_basis)
+    else:
+        S = subspace_basis
+
+    # compute S*(S^T*S)^{-1}*S'*V
+    projected = S*scipy.sparse.linalg.spsolve(S.T*S,S.T*V)
+
+    orthogonal_proj = V - projected
     return orthogonal_proj
 
 
@@ -352,3 +422,12 @@ def create_partition_matrix_from_vector(partition_vec):
 #TODO: implement method for comparison
 def find_relevant_eigenvectors_Le_Levina(M, multiplier=5):
     pass
+
+
+
+def test_sparse_and_transform(A):
+    """ Check if matrix is sparse and if not, return it as sparse matrix"""
+    if not scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+    return A

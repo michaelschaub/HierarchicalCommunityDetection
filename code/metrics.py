@@ -46,7 +46,7 @@ def fraction_correctly_aligned(partition1,partition2):
 
     # cost is minimized --- overlap maximized
     cost_matrix = -pmatrix1.T.dot(pmatrix2)
-    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    row_ind, col_ind = linear_sum_assignment(cost_matrix.A)
     cost = -cost_matrix[row_ind, col_ind].sum()
 
     return cost
@@ -56,12 +56,27 @@ def overlap_score(partition1, partition2):
     Compare the overlap score as defined, e.g., in Krzakala et al's spectral redemption paper
     """
     raw_overlap = fraction_correctly_aligned(partition1, partition2)
-    num_nodes, num_groups = partition1.shape
-    num_groups2 = partition2.shape[1]
+    num_nodes = partition1.size
+    num_groups = partition1.max() +1
+    num_groups2 = partition2.max() +1
 
+    # TODO: this might not be necessary!? See below
     if num_groups2 != num_groups:
-        print "partitions with different number of groups are prepared! Please prepare the results \
-               accordingly"
+        print "partitions with different number of groups are prepared! Please prepare the results accordingly"
+
+    if num_groups < num_groups2:
+        num_groups = num_groups2
 
     overlap_score  = (raw_overlap/num_nodes - 1/num_groups)/(1-1/num_groups)
     return overlap_score
+
+def create_partition_matrix_from_vector(partition_vec):
+    """
+    Create a partition indicator matrix from a given vector; -1 entries in partition vector will
+    be ignored and can be used to denote unasigned nodes.
+    """
+    nr_nodes = partition_vec.size
+    k=len(np.unique(partition_vec))
+
+    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
+    return partition_matrix

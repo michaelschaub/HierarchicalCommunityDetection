@@ -200,6 +200,8 @@ class GHRG(nx.DiGraph):
         """
         if mode == 'Undirected':
             G=nx.Graph()
+            # make sure that all nodes are added even though the graph might be disconnected
+            G.add_nodes_from(np.arange(self.node[0]['n']))
         else:
             error('directed case not defined yet')
 
@@ -259,7 +261,7 @@ class GHRG(nx.DiGraph):
 
     def get_lowest_partition(self):
         partition=np.zeros(self.node[self.root_node]['n'])
-        print len(partition)
+        # print len(partition)
         pi=0
         for node in self.nodes_iter():
             if len(self.successors(node))==0:
