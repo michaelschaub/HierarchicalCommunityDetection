@@ -9,6 +9,31 @@ from sklearn import preprocessing
 from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 
+def hier_spectral_partition(A, mode="BH_plus_Spectral"):
+    """Performs hierarchical spectral clustering. """
+
+    if mode == "BH_plus_Spectral":
+        first_round_method = 'Bethe'
+        first_round_num_groups = -1
+        method_agglomeration = "Lap"
+        model_select_agglomeration = 'spectral'
+
+    #FIRST RUN --- try to partition the graph
+    partition = spectral_partition(A,mode=first_round_method,num_groups=first_round_num_groups)
+
+    k = np.max(partition)
+    while k > 1:
+        links_between_groups, possible_links_between_groups = compute_number_links_between_groups(A,partition)
+        A = links_between_groups
+        # print "Aggregated network:"
+        # print links_between_groups
+        k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups)
+
+    #TODO: "zooming in" part
+    print  k, partition
+
+    print "DONE, now assembling results in Dendrogram"
+
 
 def spectral_partition(A, mode='Lap', num_groups=2):
     """ Perform one round of spectral clustering for a given network matrix A
@@ -167,6 +192,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
             return partition_vector
 
     else:
+        # TODO: note that we combine the eigenvectors of pos/negative BH and do not use
+        # information about positive / negative assortativity here
         # find eigenvectors corresponding to the algebraically smallest (most neg.) eigenvalues
         ev_pos, evecs_pos = scipy.sparse.linalg.eigsh(BH_pos,num_groups,which='SA')
         ev_neg, evecs_neg = scipy.sparse.linalg.eigsh(BH_neg,num_groups,which='SA')
@@ -263,28 +290,19 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 
     return BT
 
-#################################
-# GAUSSIAN MATRIX CLUSTERING
-#################################
-
-def find_relevant_eigenvectors_Gaussian(Omega):
-    """
-    Given a matrix of normalized edge counts between the groups, and assuming that these
-    edge-counts are derived from an undirected network, we interpret the resulting reducing array of edge_counts (made mean-free and normalized) as an array of Gaussians, and use RMT to find the expected maximal eigenvalue.
-    """
-    #TODO
-    pass
-
-
 ##################################################
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
 def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
+    #TODO: atm this uses just the standard laplacian which should concentrate as we are
+    # in the aggregated regime
 
     max_k = Omega.shape[0]
     best_k = max_k
     error = 999
+    #TODO: we might want to adjust this later on
+    thres = 0.025
 
     if reg:
         # set tau to average degree
@@ -306,8 +324,8 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     print "evec_sorted"
     print evecs
 
-    #TODO: 2x2 case needs to be handled separately!
-    for k in xrange(max_k-1,0,-1):
+    #TODO: check all these cases carefully!
+    for k in xrange(max_k-1,1,-1):
         if mode == 'DCSBM':
             V = evecs[:,:k]
             print "V"
@@ -349,8 +367,30 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
         print "K, error: "
         print k, error
         # Note that this should always be fulfilled at k=1
-        if error < 0.01*max_k:
+        if error < thres*max_k:
+            print "Agglomerated into " + str(k) + " groups \n\n"
             return k, partition_vec, H, error
+
+    #TEST if there are indications for final/global agglomeration
+    # equitable condition
+    # actually this last part might be unnecessary..
+    AH = Omega.sum(axis=1) / np.sqrt(max_k)
+    HHpAH = np.ones_like(AH)*AH.mean()
+    error = scipy.linalg.norm(AH - HHpAH)
+    if error < thres*max_k:
+        partition_vec = np.ones((1,max_k))
+        H = create_partition_matrix_from_vector(partition_vec)
+        k = 1
+        print "Final agglomeration: yes"
+        return 1, partition_vec, H, error
+    else:
+        partition_vec = -1
+        H = -1
+        k = 0
+        print "Final agglomeration: no"
+        return k , partition_vec, H, error
+
+
 
 def project_orthogonal_to(subspace_basis,vectors_to_project):
     """
@@ -431,3 +471,30 @@ def test_sparse_and_transform(A):
         print "Input matrix not in sparse format, transforming to sparse matrix"
         A = scipy.sparse.csr_matrix(A)
     return A
+
+
+def compute_number_links_between_groups(A,partition_vec):
+    """
+    Compute the number of possible and actual links between the groups indicated in the
+    partition vector.
+    """
+
+    pmatrix = create_partition_matrix_from_vector(partition_vec)
+    # number of columns is number of groups
+    nr_groups = pmatrix.shape[1]
+
+    if not scipy.sparse.issparse(A):
+        A = scipy.mat(A)
+
+    # all inputs are matrices here -- calculation works accordingly and transforms to
+    # array only afterwards
+    # each block counts the number of half links / directed links
+    links_between_groups = pmatrix.T * A * pmatrix
+    links_between_groups = links_between_groups.A
+
+    # convert to array type first, before performing outer product
+    nodes_per_group = pmatrix.sum(0).A
+    possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
+
+
+    return links_between_groups, possible_links_between_groups

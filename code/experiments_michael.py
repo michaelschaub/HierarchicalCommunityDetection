@@ -8,47 +8,6 @@ from matplotlib import pyplot as plt
 
 np.set_printoptions(precision=4,linewidth=200)
 
-def testModelSelection(max_num_groups=20):
-    ratio=0.1
-    n_levels=3 #number of levels generated in GHRG
-
-    groups_per_level=2 # number of groups at each level
-
-    for n in 2**np.arange(8,14):
-        for cm in 2**np.arange(2,6):
-            for rep in xrange(100):
-                print n,cm, rep
-                #~ cm=20 # degree parameter
-                #~ n=1000 #nodes
-                failed=True
-                attempts=0
-                while failed:
-                    try:
-                        D_gen=create2paramGHRG(n,cm,ratio,n_levels,groups_per_level)
-                        G=D_gen.generateNetwork()
-                        A = D_gen.to_scipy_sparse_matrix(G)
-                        looxv=inference.infer_spectral_blockmodel(A, max_num_groups=max_num_groups)/float(n)
-                        failed=False
-                    except:
-                        attempts+=1
-                        print attempts
-
-
-                #~ plt.figure()
-                #~ plt.plot(np.arange(1,max_num_groups),looxv)
-                #~ print looxv
-                diff = looxv[1:]-looxv[:-1]
-                #~ print diff
-                #~ plt.plot(np.arange(2,max_num_groups),diff)
-                try:
-                    belowzero=((looxv[1:]-looxv[:-1])<0).nonzero()[0][0]+2
-                except IndexError:
-                    belowzero=20
-                print (looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7)
-
-                with open('res_tms01.txt','a') as f:
-                    f.write('%i\t%i\t%f\t%f\t%i\n' % (n,cm,(looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7) ))
-
 
 
 """
@@ -57,110 +16,51 @@ Experiment: Test Spectral inference algorithm on hierarchical test graph
 Create a sequence of test graphs (realizations of a specified hier. random model) and try
 to infer the true partition using spectral methods
 """
-def exp1(runs=10,n_levels=3,groups_per_level=2):
-    cm=20
-    n=1000
-    K=groups_per_level**n_levels
-
-    ratios=np.arange(0.1,1.,0.1)
-
-    bb_mean=np.zeros(len(ratios))
-    tt_mean=np.zeros(len(ratios))
-    tb_mean=np.zeros(len(ratios))
-
-    run_count=np.ones(len(ratios))*runs
-
-    for ri,ratio in enumerate(ratios):
-
-        for run in xrange(runs):
-            print ratio, run
-            D_gen=create2paramGHRG(n,cm,ratio,n_levels,groups_per_level)
-            G=D_gen.generateNetwork()
-            print G
-            A = D_gen.to_scipy_sparse_matrix(G)
-            if ~scipy.sparse.isspmatrix(A):
-                print "TEST2"
-
-            #~ try:
-            D_inferred = inference.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-
-            partitions=np.empty((2,n))
-            partitions[0,:] = D_gen.get_lowest_partition()
-            partitions[1,:] = D_inferred.get_lowest_partition()
-            bb_mean[ri]+=metrics.calcVI(partitions)[0,1]
-
-            partitions[1,:] = D_inferred.partition_level(0)
-            tb_mean[ri]+= metrics.calcVI(partitions)[0,1]
-            partitions[0,:] = D_gen.partition_level(0)
-            tt_mean[ri]+= metrics.calcVI(partitions)[0,1]
-            #~ except:
-                #~ print 'FAIL'
-                #~ run_count[ri]-=1
-
-    tt_mean/=run_count
-    tb_mean/=run_count
-    bb_mean/=run_count
-
-    plt.figure()
-    plt.plot(ratios,bb_mean)
-    plt.plot(ratios,tb_mean)
-    plt.plot(ratios,tt_mean)
-
-    plt.legend(['low-low','high-low', 'high-high'])
-
-    return bb_mean, tb_mean, tt_mean
-
-def exp2(n_levels=2,groups_per_level=3):
+def run_spectral_algorithms_hier(n_levels=2,groups_per_level=2):
     # mean degree number of nodes etc.
-    cm=80
-    n=1000
+    SNR = 3
+    n=2000
     K=groups_per_level**n_levels
-    ratio = 0.3
+    ratio = 0.5
 
-
-
-    D_gen=create2paramGHRG(n,cm,ratio,n_levels,groups_per_level)
+    D_gen=create2paramGHRG(n,SNR,ratio,n_levels,groups_per_level)
     G=D_gen.generateNetworkExactProb()
-
     A = D_gen.to_scipy_sparse_matrix(G)
-    # plt.spy(A)
+    plt.spy(A,markersize=0.01)
 
     pvec = spectral.spectral_partition(A,'Bethe',-1)
     plt.figure()
     plt.plot(pvec,marker='s')
+
+    partition_true =D_gen.get_lowest_partition()
+    ol_score = metrics.overlap_score(pvec,partition_true)
+    print "Partition into "+ str(np.max(pvec)) +" groups"
+    print "OVERLAP SCORE"
+    print ol_score
 
     links_between_groups, possible_links_between_groups = inference.compute_number_links_between_groups(A,pvec)
 
     print "Aggregated network:"
     print links_between_groups
 
-    k, pvec2, H, error = spectral.identify_hierarchy_in_affinity_matrix(links_between_groups)
-    plt.figure()
-    plt.plot(pvec2)
+    spectral.hier_spectral_partition(A)
 
-    links_between_groups, possible_links_between_groups = inference.compute_number_links_between_groups(links_between_groups,pvec2)
-
-
-    k, pvec2, H, error = spectral.identify_hierarchy_in_affinity_matrix(links_between_groups)
-    plt.figure()
-    plt.plot(pvec2)
+    # k, pvec2, H, error = spectral.identify_hierarchy_in_affinity_matrix(links_between_groups)
+    # plt.figure()
+    # plt.plot(pvec2)
 
 
-    #~ try:
-    D_inferred = inference.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
+def test_spectral_algorithms_non_hier():
+    SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel = run_spectral_algorithms_non_hier()
+    plot_results_overlap(SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel)
 
-    partitions=np.empty((2,n))
-    partitions[0,:] = D_gen.get_lowest_partition()
-    partitions[1,:] = D_inferred.get_lowest_partition()
 
-    return D_gen, D_inferred
-
-def test_spectral_algorithms_non_hier(n_groups=4):
+def run_spectral_algorithms_non_hier(n_groups=4):
     # mean degree and number of nodes etc.
     n=1000
     n_levels = 1
     K=n_groups**n_levels
-    ratio = 0.3
+    ratio = 0.4
 
     SNR = np.arange(0.5,3,0.5)
     nsamples = 20
@@ -193,27 +93,15 @@ def test_spectral_algorithms_non_hier(n_groups=4):
 
     return SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel
 
-def plot_results_overlap(SNR,overlap):
+def plot_results_overlap(SNR,overlap_Bethe,overlap_Rohe,overlap_Seidel):
     plt.figure()
-    plt.errorbar(SNR, overlap.mean(axis=1), overlap.std(axis=1))
+    plt.errorbar(SNR, overlap_Bethe.mean(axis=1), overlap_Bethe.std(axis=1),label="BH")
+    plt.errorbar(SNR, overlap_Rohe.mean(axis=1), overlap_Rohe.std(axis=1),label="regL")
+    plt.errorbar(SNR, overlap_Seidel.mean(axis=1), overlap_Seidel.std(axis=1),label="SL")
+    plt.legend()
+    plt.xlabel("SNR")
+    plt.ylabel("overlap score")
 
-
-
-"""
-Calculate in and out block degree parameters for a given mean degree and ratio
-parameters:
-    cm  : mean degree
-    ratio   : cout/cin
-    K   : number of groups
-    ncin    : number of cin blocks per row
-
-Note that cin (cout) is not the expected degree inside the block, but rather defined via
-cm = ncin *cin / K + (K-ncin)*cout / K
-"""
-def calculateDegrees(cm,ratio,K,ncin=1.):
-    cin = (K*cm) / (ncin+(K-ncin)*ratio)
-    cout = cin * ratio
-    return cin, cout
 
 def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
     # SNR a= in-weight, b = out-weight
@@ -239,17 +127,18 @@ def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
 
     #interaction probabilities
     omega={}
+    n_this_level = n
     for level in xrange(n_levels):
         # cin, cout = calculateDegrees(cm,ratio,groups_per_level)
         cin, cout = calculateDegreesFromSNR(snr,ratio,groups_per_level)
-        #TODO
-        # This test here is wrong, cin and cout have to be referred to the total network (cm has to come from the total) -- it would be detectable, if we were to zoom inm but not on first shot!
-        print "Hierarchy Level: ", level, '| Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n,cout/n
+        print "Hierarchy Level: ", level, '| KS Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n_this_level,cout/n_this_level
 
         # Omega is assigned on a block level, i.e. for each level we have one omega array
         # this assumes a perfect hierarchy with equal depth everywhere
-        omega[level] = np.ones((groups_per_level,groups_per_level))*cout/n + np.eye(groups_per_level)*(cin/n-cout/n)
-        cm=cin
+        omega[level] = np.ones((groups_per_level,groups_per_level))*cout/n_this_level + np.eye(groups_per_level)*(cin/n_this_level-cout/n_this_level)
+        n_this_level = n_this_level / float(groups_per_level)
+        if np.floor(n_this_level) != n_this_level:
+            print "Rounding number of nodes"
 
 
     D=GHRG()
