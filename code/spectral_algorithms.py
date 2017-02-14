@@ -9,8 +9,8 @@ from sklearn import preprocessing
 from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 
-def hier_spectral_partition(A, mode="BH_plus_Spectral"):
-    """Performs hierarchical spectral clustering. """
+def hier_spectral_partition_agglomerate(A, mode="BH_plus_Spectral"):
+    """Performs spectral clustering and hierarchical agglomeration based on the provided mode parameter"""
 
     if mode == "BH_plus_Spectral":
         first_round_method = 'Bethe'
@@ -19,20 +19,25 @@ def hier_spectral_partition(A, mode="BH_plus_Spectral"):
         model_select_agglomeration = 'spectral'
 
     #FIRST RUN --- try to partition the graph
+    pvec = []
     partition = spectral_partition(A,mode=first_round_method,num_groups=first_round_num_groups)
 
-    k = np.max(partition)
+    #STORE RESULTS
+    pvec.append(partition)
+    k = np.max(partition)+1
+    k0 =k
+    print "HIER SPECTRAL PARITION -- agglomerative\n Initial partition into", k0, "groups \n"
     while k > 1:
         links_between_groups, possible_links_between_groups = compute_number_links_between_groups(A,partition)
         A = links_between_groups
         # print "Aggregated network:"
         # print links_between_groups
         k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups)
+        if partition is not None:
+            pvec.append(partition)
 
-    #TODO: "zooming in" part
-    print  k, partition
 
-    print "DONE, now assembling results in Dendrogram"
+    return pvec
 
 
 def spectral_partition(A, mode='Lap', num_groups=2):
@@ -302,7 +307,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     best_k = max_k
     error = 999
     #TODO: we might want to adjust this later on
-    thres = 0.025
+    thres = 0.02
 
     if reg:
         # set tau to average degree
@@ -320,22 +325,22 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     ev, evecs = scipy.linalg.eigh(L)
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
-    print "START AGGLOMERATION"
-    print "evec_sorted"
-    print evecs
+    print "START AGGLOMERATION PHASE"
+    # print "evec_sorted"
+    # print evecs
 
     #TODO: check all these cases carefully!
     for k in xrange(max_k-1,1,-1):
         if mode == 'DCSBM':
             V = evecs[:,:k]
-            print "V"
-            print V
+            # print "V"
+            # print V
             X = preprocessing.normalize(V, axis=1, norm='l2')
             clust = KMeans(n_clusters = k)
             clust.fit(X)
             partition_vec = clust.labels_
             partition_vec = relabel_partition_vec(partition_vec)
-            print partition_vec
+            # print partition_vec
 
             H = create_partition_matrix_from_vector(partition_vec)
             Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
@@ -344,28 +349,28 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
 
         elif mode == 'SBM':
             V = evecs[:,:k]
-            print "V"
-            print V
+            # print "V"
+            # print V
             X = preprocessing.normalize(V, axis=1, norm='l2')
             clust = KMeans(n_clusters = k)
             clust.fit(X)
             partition_vec = clust.labels_
             partition_vec = relabel_partition_vec(partition_vec)
-            print partition_vec
+            # print partition_vec
 
             H = create_partition_matrix_from_vector(partition_vec)
             H = Dtau_sqrt_inv.dot(H)
             H = preprocessing.normalize(H,axis=0,norm='l2')
         else:
-            error('something went wrong. please specify valid mode')
+            error('something went wrong. Please specify valid mode')
 
         proj1 = project_orthogonal_to(H,V)
         proj2 = project_orthogonal_to(V,H)
         norm1 = scipy.linalg.norm(proj1)
         norm2 = scipy.linalg.norm(proj2)
         error = 0.5*(norm1+norm2)
-        print "K, error: "
-        print k, error
+        # print "K, error: "
+        # print k, error
         # Note that this should always be fulfilled at k=1
         if error < thres*max_k:
             print "Agglomerated into " + str(k) + " groups \n\n"
@@ -381,13 +386,13 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
         partition_vec = np.ones((1,max_k))
         H = create_partition_matrix_from_vector(partition_vec)
         k = 1
-        print "Final agglomeration: yes"
+        print "Final agglomeration: yes \n"
         return 1, partition_vec, H, error
     else:
-        partition_vec = -1
+        partition_vec = None
         H = -1
         k = 0
-        print "Final agglomeration: no"
+        print "Final agglomeration: no \n"
         return k , partition_vec, H, error
 
 

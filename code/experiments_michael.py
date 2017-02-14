@@ -8,6 +8,11 @@ from matplotlib import pyplot as plt
 
 np.set_printoptions(precision=4,linewidth=200)
 
+# Within ipython shell:
+# %load_ext autoreload
+# %autoreload 2
+# %pylab
+# import experiments_michael
 
 
 """
@@ -18,36 +23,40 @@ to infer the true partition using spectral methods
 """
 def run_spectral_algorithms_hier(n_levels=2,groups_per_level=2):
     # mean degree number of nodes etc.
-    SNR = 3
-    n=2000
+    SNR = 2
+    n=1000
     K=groups_per_level**n_levels
     ratio = 0.5
 
     D_gen=create2paramGHRG(n,SNR,ratio,n_levels,groups_per_level)
     G=D_gen.generateNetworkExactProb()
     A = D_gen.to_scipy_sparse_matrix(G)
-    plt.spy(A,markersize=0.01)
+    # plt.figure()
+    # plt.spy(A,markersize=0.5)
 
     pvec = spectral.spectral_partition(A,'Bethe',-1)
-    plt.figure()
-    plt.plot(pvec,marker='s')
-
-    partition_true =D_gen.get_lowest_partition()
-    ol_score = metrics.overlap_score(pvec,partition_true)
-    print "Partition into "+ str(np.max(pvec)) +" groups"
-    print "OVERLAP SCORE"
-    print ol_score
-
-    links_between_groups, possible_links_between_groups = inference.compute_number_links_between_groups(A,pvec)
-
-    print "Aggregated network:"
-    print links_between_groups
-
-    spectral.hier_spectral_partition(A)
-
-    # k, pvec2, H, error = spectral.identify_hierarchy_in_affinity_matrix(links_between_groups)
     # plt.figure()
-    # plt.plot(pvec2)
+    # plt.plot(pvec,marker='s')
+
+    partition_true = D_gen.get_lowest_partition()
+    partition_high = D_gen.partition_level(0)
+
+    ol_score = metrics.overlap_score(pvec,partition_true)
+    print "Partition into "+ str(np.max(pvec)+1) +" groups"
+    print "OVERLAP SCORE (SINGLE LAYER INFERENCE): ", ol_score, "\n\n"
+
+
+    pvecs = spectral.hier_spectral_partition_agglomerate(A)
+    pvecs_new =expand_partitions_to_full_graph(pvecs)
+
+    ol_score = metrics.overlap_score(pvecs_new[0],partition_true)
+    print "Partition into "+ str(np.max(pvecs_new[0])+1) +" groups"
+    print "OVERLAP SCORE Finest: ", ol_score, "\n\n"
+
+
+    ol_score = metrics.overlap_score(pvecs_new[1],partition_high)
+    print "Partition into "+ str(np.max(pvecs_new[1])+1) +" groups"
+    print "OVERLAP SCORE Coarsest: ", ol_score, "\n\n"
 
 
 def test_spectral_algorithms_non_hier():
@@ -110,11 +119,22 @@ def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
     # SNR = a^2 *(1-r)^2 / (ka + k(k-1)*ra)
     # SNR = a * (1-r)^2 / (k + k(k-1)*r)
     # a = SNR * (k + k(k-1)*r) / (1-r)^2
-    a = snr * (num_cluster + num_cluster*(num_cluster-1)*ratio) / ((1-ratio)**2);
+    a = snr * (num_cluster + num_cluster*(num_cluster-1)*ratio) / float((1-ratio)**2);
     b = ratio*a;
 
     return a, b
 
+def expand_partitions_to_full_graph(pvecs):
+    pvec_new = []
+    pvec_new.append(pvecs[0])
+
+    for i in xrange(len(pvecs)-1):
+        pold = pvecs[i]
+        pnew = pvecs[i+1]
+        partition = pnew[pold]
+        pvec_new.append(partition)
+
+    return pvec_new
 
 """
 Function to create a test GHRG for simulations
