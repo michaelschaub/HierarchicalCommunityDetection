@@ -8,12 +8,19 @@ from sklearn.cluster import KMeans
 from sklearn import preprocessing
 from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
+from scipy.signal import argrelextrema
 
 def hier_spectral_partition_agglomerate(A, mode="BH_plus_Spectral"):
     """Performs spectral clustering and hierarchical agglomeration based on the provided mode parameter"""
 
     if mode == "BH_plus_Spectral":
         first_round_method = 'Bethe'
+        first_round_num_groups = -1
+        method_agglomeration = "Lap"
+        model_select_agglomeration = 'spectral'
+
+    elif mode == "LS_plus_Spectral":
+        first_round_method = 'SeidelLap'
         first_round_num_groups = -1
         method_agglomeration = "Lap"
         model_select_agglomeration = 'spectral'
@@ -32,7 +39,10 @@ def hier_spectral_partition_agglomerate(A, mode="BH_plus_Spectral"):
         A = links_between_groups
         # print "Aggregated network:"
         # print links_between_groups
-        k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups)
+        if method_agglomeration == "Lap":
+            k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups)
+        else:
+            pass
         if partition is not None:
             pvec.append(partition)
 
@@ -68,7 +78,7 @@ def spectral_partition(A, mode='Lap', num_groups=2):
         if num_groups != -1:
             partition, _ = cluster_with_SLaplacian_simple(A,num_groups=num_groups)
         else:
-            pass
+            k, partition, _, __ = cluster_with_SLaplacian_and_model_select(A,num_groups=num_groups)
 
     else:
         raise ValueError("mode '%s' not recognised - available modes are 'Lap', Bethe', or 'NonBack'" % mode)
@@ -237,12 +247,11 @@ def create_seidel_lap_operator(A,rho=None):
         return mv
 
     LS = LinearOperator((n,n),matvec=seidel_lap_mat_vec)
-    return LS
+    return LS, Ds_invs
 
 def cluster_with_SLaplacian_simple(A,num_groups,rho=None):
     # compute eigenvalues and eigenvectors (sorted according to smallest)
-    # TODO: make selection based on eigenvectors
-    L = create_seidel_lap_operator(A)
+    L, _ = create_seidel_lap_operator(A)
     ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='SA')
 
     clust = KMeans(n_clusters = num_groups)
@@ -251,6 +260,65 @@ def cluster_with_SLaplacian_simple(A,num_groups,rho=None):
 
     return partition_vector, evecs
 
+def cluster_with_SLaplacian_and_model_select(A,num_groups,rho=None,max_k=10,mode='SBM'):
+    # compute eigenvalues and eigenvectors (sorted according to smallest)
+    L, Ds_invs = create_seidel_lap_operator(A)
+    ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='SA')
+    print ev
+
+    print "START MODEL SELECTION PHASE"
+
+    n = L.shape[0]
+    error = np.zeros(max_k)
+
+    #TODO: check all these cases carefully!
+    for k in xrange(1,max_k):
+        if mode == 'DCSBM':
+            error("NOT FULLY DEVELOPED YET!!")
+            pass
+
+        elif mode == 'SBM':
+            V = evecs[:,:k]
+            # print "V"
+            # print V, V.shape
+            X = preprocessing.normalize(V, axis=1, norm='l2')
+            clust = KMeans(n_clusters = k)
+            clust.fit(X)
+            partition_vec = clust.labels_
+            partition_vec = relabel_partition_vec(partition_vec)
+            # print partition_vec
+
+            H = create_partition_matrix_from_vector(partition_vec)
+            # H = Ds_invs.dot(H)
+            H = preprocessing.normalize(H,axis=0,norm='l2')
+        else:
+            error('something went wrong. Please specify valid mode')
+
+        proj1 = project_orthogonal_to(H,V)
+        proj2 = project_orthogonal_to(V,H)
+        norm1 = scipy.linalg.norm(proj1)
+        norm2 = scipy.linalg.norm(proj2)
+        # print norm1, norm2
+        e = 0.5*(norm1+norm2)
+        print "K, error: "
+        print k, e
+        error[k]=e
+
+    local_min = argrelextrema(error,np.less)
+    print local_min[-1]
+    if local_min is None:
+        return 1, None, None, None
+    else:
+        kbest = local_min[-1][-1]
+        V = evecs[:,:kbest]
+        X = preprocessing.normalize(V, axis=1, norm='l2')
+        clust = KMeans(n_clusters = kbest)
+        clust.fit(X)
+        partition_vec = clust.labels_
+        partition_vec = relabel_partition_vec(partition_vec)
+        H = create_partition_matrix_from_vector(partition_vec)
+
+        return kbest, partition_vec, H, error[kbest]
 
 
 ##########################################
@@ -304,8 +372,6 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     # in the aggregated regime
 
     max_k = Omega.shape[0]
-    best_k = max_k
-    error = 999
     #TODO: we might want to adjust this later on
     thres = 0.02
 
@@ -322,6 +388,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     L = Dtau_sqrt_inv.dot(L.T).T
     L = (L+L.T)/2
 
+    #NOTE: THIS is not a Laplacian but the normalized adjacency of Rohe et al..
     ev, evecs = scipy.linalg.eigh(L)
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
