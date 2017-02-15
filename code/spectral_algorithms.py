@@ -10,6 +10,50 @@ from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
 
+def hier_spectral_partition(A,ma='LS_plus_Spectral',mz='Bethe'):
+    pvec_agg = hier_spectral_partition_agglomerate(A,mode=ma)
+    pvec_agg = expand_partitions_to_full_graph(pvec_agg)
+    p0 = pvec_agg[0]
+
+    pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=mz)
+
+    pvec_tot = pvec_zoom + pvec_agg
+
+    return pvec_tot
+
+
+def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
+    nc = np.max(partition)+1
+
+    pzoom = []
+    keep_looping = True
+    print "RECURSIVE SPLITTING"
+    while keep_looping:
+        max_k = 0
+        pvec = np.zeros_like(partition)
+
+        for ii in xrange(nc):
+            Anew = A[:,partition==ii]
+            Anew = Anew[partition==ii,:]
+
+            pnew = spectral_partition(Anew,mode,zgroups)
+            if pvec.max() == 0:
+                pvec[partition==ii] = pnew + max_k
+                max_k = pvec.max()
+            else:
+                pvec[partition==ii] = pnew + max_k + 1
+                max_k = pvec.max()
+
+        if pvec.max() != 0:
+            print "RECURSIVE SPLIT FOUND", pvec.max()+1, "groups"
+            pzoom.append(pvec)
+            partition = pvec
+        else:
+            keep_looping = False
+
+    return pzoom
+
+
 def hier_spectral_partition_agglomerate(A, mode="BH_plus_Spectral"):
     """Performs spectral clustering and hierarchical agglomeration based on the provided mode parameter"""
 
@@ -260,7 +304,7 @@ def cluster_with_SLaplacian_simple(A,num_groups,rho=None):
 
     return partition_vector, evecs
 
-def cluster_with_SLaplacian_and_model_select(A,num_groups,rho=None,max_k=10,mode='SBM'):
+def cluster_with_SLaplacian_and_model_select(A,num_groups,rho=None,max_k=16,mode='SBM'):
     # compute eigenvalues and eigenvectors (sorted according to smallest)
     L, Ds_invs = create_seidel_lap_operator(A)
     ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='SA')
@@ -289,7 +333,7 @@ def cluster_with_SLaplacian_and_model_select(A,num_groups,rho=None,max_k=10,mode
             # print partition_vec
 
             H = create_partition_matrix_from_vector(partition_vec)
-            # H = Ds_invs.dot(H)
+            H = Ds_invs.dot(H)
             H = preprocessing.normalize(H,axis=0,norm='l2')
         else:
             error('something went wrong. Please specify valid mode')
@@ -450,7 +494,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     HHpAH = np.ones_like(AH)*AH.mean()
     error = scipy.linalg.norm(AH - HHpAH)
     if error < thres*max_k:
-        partition_vec = np.ones((1,max_k))
+        partition_vec = np.zeros((1,max_k))
         H = create_partition_matrix_from_vector(partition_vec)
         k = 1
         print "Final agglomeration: yes \n"
@@ -494,6 +538,8 @@ def project_orthogonal_to(subspace_basis,vectors_to_project):
 #######################################################
 def relabel_partition_vec(pvec):
     k = pvec.max()+1
+    if k ==1:
+        return pvec
     remap = -np.ones(k,dtype='int')
     new_id = 0
     for element in pvec:
@@ -570,3 +616,15 @@ def compute_number_links_between_groups(A,partition_vec):
 
 
     return links_between_groups, possible_links_between_groups
+
+def expand_partitions_to_full_graph(pvecs):
+    pvec_new = []
+    pvec_new.append(pvecs[0])
+
+    for i in xrange(len(pvecs)-1):
+        pold = pvecs[i]
+        pnew = pvecs[i+1]
+        partition = pnew[pold]
+        pvec_new.append(partition)
+
+    return pvec_new

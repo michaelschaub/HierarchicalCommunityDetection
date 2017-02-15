@@ -21,10 +21,10 @@ Experiment: Test Spectral inference algorithm on hierarchical test graph
 Create a sequence of test graphs (realizations of a specified hier. random model) and try
 to infer the true partition using spectral methods
 """
-def run_spectral_algorithms_hier(n_levels=3,groups_per_level=2):
+def run_spectral_algorithms_hier(n_levels=2,groups_per_level=4):
     # mean degree number of nodes etc.
-    SNR = 5
-    n=10000
+    SNR = 1
+    n=1000
     K=groups_per_level**n_levels
     ratio = 0.5
 
@@ -46,16 +46,16 @@ def run_spectral_algorithms_hier(n_levels=3,groups_per_level=2):
     print "OVERLAP SCORE (SINGLE LAYER INFERENCE): ", ol_score, "\n\n"
 
 
-    pvecs = spectral.hier_spectral_partition_agglomerate(A)
-    pvecs_new = expand_partitions_to_full_graph(pvecs)
+    pvecs = spectral.hier_spectral_partition(A)
+    print pvecs
 
-    ol_score = metrics.overlap_score(pvecs_new[0],partition_true)
-    print "Partition into "+ str(np.max(pvecs_new[0])+1) +" groups"
+    ol_score = metrics.overlap_score(pvecs[0],partition_true)
+    print "Partition into "+ str(np.max(pvecs[0])+1) +" groups"
     print "OVERLAP SCORE Finest: ", ol_score, "\n\n"
 
 
-    ol_score = metrics.overlap_score(pvecs_new[-1],partition_high)
-    print "Partition into "+ str(np.max(pvecs_new[-1])+1) +" groups"
+    ol_score = metrics.overlap_score(pvecs[-1],partition_high)
+    print "Partition into "+ str(np.max(pvecs[-1])+1) +" groups"
     print "OVERLAP SCORE Coarsest: ", ol_score, "\n\n"
 
 
