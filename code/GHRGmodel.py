@@ -258,7 +258,18 @@ class GHRG(nx.DiGraph):
             if len(self.successors(node))==0:
                 children=self.node[node]['nnodes']
                 print node, len(children), children
-
+    
+    def get_highest_partition(self):
+        partition=np.zeros(self.node[self.root_node]['n'])
+        # print len(partition)
+        pi=0
+        for node in self.node[0]['children']:
+            children=self.node[node]['nnodes']
+            #~ print node, len(children), children
+            partition[children]=pi
+            pi+=1
+        return partition
+    
     def get_lowest_partition(self):
         partition=np.zeros(self.node[self.root_node]['n'])
         # print len(partition)
