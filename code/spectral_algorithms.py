@@ -110,7 +110,7 @@ def spectral_partition(A, mode='Lap', num_groups=2):
             partition, _ = regularized_laplacian_spectral_clustering(A,num_groups=num_groups)
 
     elif mode == "Bethe":
-        partition = cluster_with_BetheHessian(A,num_groups=num_groups)
+        partition = cluster_with_BetheHessian(A,num_groups=num_groups,mode='weighted')
 
     elif mode == "NonBack":
         pass
@@ -209,7 +209,7 @@ def build_weighted_BetheHessian(A,r):
     return BHw
 
 
-def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
+def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighted'):
     """
     Perform one round of spectral clustering using the Bethe Hessian
     """
@@ -233,8 +233,15 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa'):
         partition_vector = np.zeros(A.shape[0],dtype='int')
         return partition_vector
 
-    BH_pos = build_BetheHessian(A,r)
-    BH_neg = build_BetheHessian(A,-r)
+    if mode == 'unweighted':
+        BH_pos = build_BetheHessian(A,r)
+        BH_neg = build_BetheHessian(A,-r)
+    elif mode == 'weighted':
+        BH_pos = build_weighted_BetheHessian(A,r)
+        BH_neg = build_weighted_BetheHessian(A,-r)
+    else:
+        print "Something went wrong"
+        return -1
 
 
     if num_groups ==-1:

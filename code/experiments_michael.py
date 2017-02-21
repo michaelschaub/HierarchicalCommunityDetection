@@ -63,6 +63,53 @@ def test_spectral_algorithms_non_hier():
     SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel = run_spectral_algorithms_non_hier()
     plot_results_overlap(SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel)
 
+def test_spectral_algorithms_multiple_networks():
+    SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel = run_spectral_algorithms_n_networks()
+    plot_results_overlap(SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel)
+
+def run_spectral_algorithms_n_networks(n_groups=4):
+    # mean degree and number of nodes etc.
+    n=1000
+    n_levels = 1
+    K=n_groups**n_levels
+    ratio = 0.4
+
+    SNR = np.arange(0.5,3,0.5)
+    nsamples = 20
+    overlap_Bethe = np.zeros((SNR.size,nsamples))
+    overlap_Rohe = np.zeros((SNR.size,nsamples))
+    overlap_Seidel = np.zeros((SNR.size,nsamples))
+    nr_network_samples = 5
+
+    for ii, snr in enumerate(SNR):
+
+        # create GHRG object with specified parameters and create a sample network from it
+        D_gen=create2paramGHRG(n,snr,ratio,n_levels,n_groups)
+        partition_true = D_gen.get_lowest_partition()
+
+        for jj in np.arange(nsamples):
+            A = 0;
+            for kk in xrange(nr_network_samples):
+                G= D_gen.generateNetworkExactProb()
+                A1= D_gen.to_scipy_sparse_matrix(G)
+                A = A + A1
+
+            A = A/float(nr_network_samples)
+
+
+            pvec = spectral.spectral_partition(A,'Bethe',n_groups)
+            ol_score = metrics.overlap_score(pvec,partition_true)
+            overlap_Bethe[ii,jj] = ol_score
+
+            pvec = spectral.spectral_partition(A,'Lap',n_groups)
+            ol_score = metrics.overlap_score(pvec,partition_true)
+            overlap_Rohe[ii,jj] = ol_score
+
+            pvec = spectral.spectral_partition(A,'SeidelLap',n_groups)
+            ol_score = metrics.overlap_score(pvec,partition_true)
+            overlap_Seidel[ii,jj] = ol_score
+
+    return SNR, overlap_Bethe, overlap_Rohe, overlap_Seidel
 
 def run_spectral_algorithms_non_hier(n_groups=4):
     # mean degree and number of nodes etc.
