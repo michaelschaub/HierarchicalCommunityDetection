@@ -1,13 +1,37 @@
+from __future__ import division
 import numpy as np
 from GHRGmodel import GHRG
 import spectral_algorithms as spectral
-import inference as inf
+import inference
 import metrics
 from matplotlib import pyplot as plt
 #~ import partialpooling as ppool
 import model_selection as ppool
-
+import change_points as cp
+from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 plt.ion()
+
+
+
+"""
+Test change point detection
+"""
+def test_cp():
+    #sliding window
+    w=4
+    #before change model
+    D1=create2paramGHRG(100,10,0.5,1,2)
+    D1=create2paramGHRG(100,10,1,1,2)
+    #after change model
+    D2=create2paramGHRG(100,10,1,1,2)
+    
+    #create sequence of graphs
+    Gs=[D1.generateNetworkExactProb() for i in xrange(w)]
+    Gs.extend([D1.generateNetworkExactProb() for i in xrange(w)])
+    
+    return cp.detectChanges_flat(Gs,w,mode='Lap')
+    
+    
 
 """
 Test partial pooling
@@ -41,10 +65,8 @@ def testpp(ratio=0.1):
     #~ ppool.compare(mcmc)
     return D_gen, D_inferred, mergeList
 
-<<<<<<< HEAD
 
-def testModelSelection(max_num_groups=20):
-    ratio=0.1
+def testModelSelection(max_num_groups=20,ratio=0.1):
     n_levels=3 #number of levels generated in GHRG
 
     level_k=2 # number of groups at each level
@@ -62,9 +84,11 @@ def testModelSelection(max_num_groups=20):
                         D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
                         G=D_gen.generateNetwork()
                         A = D_gen.to_scipy_sparse_matrix(G)
-                        looxv=inference.infer_spectral_blockmodel(A, max_num_groups=max_num_groups)/float(n)
+                        print (n*cm), A.nnz/2
+                #~ looxv=inference.infer_spectral_blockmodel(A, max_num_groups=max_num_groups)/(n*cm)
+                        looxv=2*inference.infer_spectral_blockmodel(A, max_num_groups=max_num_groups)/(A.nnz)
                         failed=False
-                    except:
+                    except ArpackNoConvergence:
                         attempts+=1
                         print attempts
                         
@@ -79,15 +103,80 @@ def testModelSelection(max_num_groups=20):
                     belowzero=((looxv[1:]-looxv[:-1])<0).nonzero()[0][0]+2
                 except IndexError:
                     belowzero=20
+                try:
+                    below05=((looxv[1:]-looxv[:-1])<0.05).nonzero()[0][0]+2
+                except IndexError:
+                    below05=20
                 print (looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7)
                 
-                with open('res_tms01.txt','a') as f:
-                    f.write('%i\t%i\t%f\t%f\t%i\n' % (n,cm,(looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7) )) 
+                with open('out/res_tms%sm.txt' % (str(ratio).replace('.','')),'a') as f:
+                    f.write('%i\t%i\t%f\t%f\t%i\t%i\n' % (n,cm,(looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7), (below05-1) )) 
     
 
+def plot_tms():
+    #~ with open('out/res_tms01c.txt') as f:
+        #~ results=np.float64([row.strip().split() for row in f.readlines()])
+    #~ plt.figure()
+    #~ plt.plot(np.arange(len(results)),results[:,2])
+    #~ plt.plot(np.arange(len(results)),results[:,3])
+    
+    with open('out/res_tms01m.txt') as f:
+        results=np.float64([row.strip().split() for row in f.readlines()])
+    plt.figure()
+    plt.plot(np.arange(len(results)),results[:,2])
+    plt.plot(np.arange(len(results)),results[:,3])
+    
+    plt.axhline(0.05,color='k')
+    plt.axhline(0.0,color='y')
+    plt.title('ratio=0.1')
+    plt.ylabel('looxv difference')
+    plt.xlabel('network index')
+    
+    with open('out/res_tms03m.txt') as f:
+        results=np.float64([row.strip().split() for row in f.readlines()])
+    plt.figure()
+    plt.plot(np.arange(len(results)),results[:,2])
+    plt.plot(np.arange(len(results)),results[:,3])
+    plt.title('ratio=0.3')
+    plt.ylabel('looxv difference')
+    plt.xlabel('network index')
 
-=======
->>>>>>> 0927e83f34b1749cee959bf7778d2f358b238a0b
+def tms(n=1000,cm=20,max_num_groups=20):
+    ratio=0.1
+    n_levels=3 #number of levels generated in GHRG
+
+    level_k=2 # number of groups at each level
+    
+    
+     # degree parameter
+     #nodes
+    #~ failed=True
+    #~ attempts=0
+    #~ while failed:
+        #~ try:
+    D_gen=create2paramGHRG(n,cm,ratio,n_levels,level_k)
+    G=D_gen.generateNetwork()
+    A = D_gen.to_scipy_sparse_matrix(G)
+    looxv=inference.infer_spectral_blockmodel(A, max_num_groups=max_num_groups)/float(n)
+            #~ failed=False
+        #~ except:
+            #~ attempts+=1
+            #~ print attempts
+            
+        
+    #~ plt.figure()
+    #~ plt.plot(np.arange(1,max_num_groups),looxv)
+    print looxv
+    diff = looxv[1:]-looxv[:-1]
+    print diff
+    plt.plot(np.arange(2,max_num_groups),diff)
+    try:
+        belowzero=((looxv[1:]-looxv[:-1])<0).nonzero()[0][0]+2
+    except IndexError:
+        belowzero=20
+    print (looxv[7]-looxv[6]), (looxv[8]-looxv[7]),(belowzero>7)
+
+
 """
 Experiment: Test Spectral inference algorithm on hierarchical test graph
 

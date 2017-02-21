@@ -29,7 +29,8 @@ def leto_experiment():
     A= D_gen.to_scipy_sparse_matrix(G)
 
     D_inferred = inference.split_network_spectral_partition(A,mode='Bethe',num_groups=n_groups)
-
+    Gnew= D_inferred.generateNetworkExactProb()
+    
     return snr, D_inferred, D_gen
 
 

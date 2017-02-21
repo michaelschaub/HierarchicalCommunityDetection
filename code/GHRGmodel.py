@@ -158,59 +158,63 @@ class GHRG(nx.DiGraph):
     """
     Function to generate networks from the model
     """
-    #TODO: DEPRECATED -- there is something wrong here!
-    def generateNetwork(self):
-        """
-        Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
-        probability of connection with other blocks by working up to the root of the tree.
-        """
-        G=nx.Graph()
+    def generateNetworkBeta(self,mode='Undirected'):
+        return self.generateNetwork(edgeProb='beta',directed=(mode=='Directed'))
+        #~ """
+        #~ Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
+        #~ probability of connection with other blocks by working up to the root of the tree.
+        #~ """
+        #~ G=nx.Graph()
 
-        #cycle through nodes and generate edges
-        for v in self.nodes_iter():
-            children=self.node[v]['children']
-            Nr=self.node[v]['Nr']
-            for ci,cj in izip(*Nr.nonzero()):
-                try:
-                    childi=self.node[children[ci]]
-                    childj=self.node[children[cj]]
-                except IndexError:      # if it is a leaf node
-                    childi=self.node[v]
-                    childj=self.node[v]
-                alpha=np.ones(Nr[ci,cj])+self.node[v]['Er'][ci,cj]
-                beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-self.node[v]['Er'][ci,cj])
-                try:
-                    p = np.random.beta(alpha,beta)
-                except ValueError:
-                    print alpha, beta, fail
-                edges= (np.random.rand(int(Nr[ci,cj])) < p).reshape((childi['n'],childj['n'])).nonzero()
-                G.add_edges_from(zip(childi['nnodes'][edges[0]],childj['nnodes'][edges[1]]))
+        #~ #cycle through nodes and generate edges
+        #~ for v in self.nodes_iter():
+            #~ children=self.node[v]['children']
+            #~ Nr=self.node[v]['Nr']
+            #~ for ci,cj in izip(*Nr.nonzero()):
+                #~ try:
+                    #~ childi=self.node[children[ci]]
+                    #~ childj=self.node[children[cj]]
+                #~ except IndexError:      # if it is a leaf node
+                    #~ childi=self.node[v]
+                    #~ childj=self.node[v]
+                #~ alpha=np.ones(Nr[ci,cj])+self.node[v]['Er'][ci,cj]
+                #~ beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-self.node[v]['Er'][ci,cj])
+                #~ try:
+                    #~ p = np.random.beta(alpha,beta)
+                #~ except ValueError:
+                    #~ print alpha, beta, fail
+                #~ edges= (np.random.rand(int(Nr[ci,cj])) < p).reshape((childi['n'],childj['n'])).nonzero()
+                #~ G.add_edges_from(zip(childi['nnodes'][edges[0]],childj['nnodes'][edges[1]]))
 
-        #remove self loops
-        G.remove_edges_from(G.selfloop_edges())
-        return G
+        #~ #remove self loops
+        #~ G.remove_edges_from(G.selfloop_edges())
+        #~ return G
 
     """
     Function to generate networks from the model
     """
     def generateNetworkExactProb(self,mode='Undirected'):
+        return self.generateNetwork(edgeProb='exact',directed=(mode=='Directed'))
+        
+    def generateNetwork(self,edgeProb='beta',directed=False):
         """
         Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
         probability of connection with other blocks by working up to the root of the tree.
         """
-        if mode == 'Undirected':
+        if directed:
+            error('directed case not defined yet')
+        else:
             G=nx.Graph()
             # make sure that all nodes are added even though the graph might be disconnected
             G.add_nodes_from(np.arange(self.node[0]['n']))
-        else:
-            error('directed case not defined yet')
+            
 
         #cycle through nodes and generate edges
         for v in self.nodes_iter():
             children=self.node[v]['children']
             Nr=self.node[v]['Nr']
             Er=self.node[v]['Er']
-            if mode=='Undirected':
+            if not directed:
                 Nr = np.triu(Nr)
                 Er = np.triu(Er)
 
@@ -222,7 +226,14 @@ class GHRG(nx.DiGraph):
                     childi=self.node[v]
                     childj=self.node[v]
                 try:
-                    p = Er[ci,cj]/Nr[ci,cj]
+                    if edgeProb=='beta':
+                        alpha=np.ones(Nr[ci,cj])+self.node[v]['Er'][ci,cj]
+                        beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-self.node[v]['Er'][ci,cj])
+                        p = np.random.beta(alpha,beta)
+                    elif edgeProb=='exact':
+                        p = Er[ci,cj]/Nr[ci,cj]
+                    else :
+                        error('edge probabilities undefined')
                     # print "Probability"
                     # print p
                 except ValueError:
