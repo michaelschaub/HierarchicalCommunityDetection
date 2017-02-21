@@ -14,6 +14,24 @@ np.set_printoptions(precision=4,linewidth=200)
 # %pylab
 # import experiments_michael
 
+def leto_experiment():
+    # mean degree and number of nodes etc.
+    n=1000
+    n_levels = 1
+    n_groups = 4
+    ratio = 0.4
+
+    snr = 2
+
+    # create GHRG object with specified parameters and create a sample network from it
+    D_gen=create2paramGHRG(n,snr,ratio,n_levels,n_groups)
+    G= D_gen.generateNetworkExactProb()
+    A= D_gen.to_scipy_sparse_matrix(G)
+
+    D_inferred = inference.split_network_spectral_partition(A,mode='Bethe',num_groups=n_groups)
+
+    return snr, D_inferred, D_gen
+
 
 """
 Experiment: Test Spectral inference algorithm on hierarchical test graph

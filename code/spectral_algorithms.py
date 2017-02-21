@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
 
-def hier_spectral_partition(A,ma='LS_plus_Spectral',mz='Bethe'):
+def hier_spectral_partition(A,ma='BH_plus_Spectral',mz='Bethe'):
     pvec_agg = hier_spectral_partition_agglomerate(A,mode=ma)
     pvec_agg = expand_partitions_to_full_graph(pvec_agg)
     p0 = pvec_agg[0]

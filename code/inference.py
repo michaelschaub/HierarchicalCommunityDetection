@@ -5,6 +5,45 @@ import numpy as np
 import scipy
 from itertools import izip
 
+def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
+    """ Recursively split graph into pieces by employing a spectral clustering strategy.
+
+    Inputs: A          -- input adjacency matrix
+            mode       -- variant of spectral clustering to use (reg. Laplacian, Bethe Hessian, Non-Backtracking)
+            num_groups -- in how many groups do we want to split the graph at each step
+                          (default: 2; set to -1 to infer number of groups from spectrum)
+
+            Output: networkx dendrogram
+    """
+
+    nr_nodes = A.shape[0]
+    partition = spectral.spectral_partition(A, mode=mode, num_groups=num_groups)
+
+    # initialise networkx output dendrogram, and store some things as properties of the graph
+    Dendro = GHRG()
+    Dendro.network_nodes = np.arange(nr_nodes)
+
+    # create root node and assign properties
+    Dendro.root_node = 0
+    # TODO: add multipliers here?!?
+    Emat, Nmat = compute_number_links_between_groups(A,partition)
+
+    Dendro.add_node(Dendro.root_node, Er=Emat, Nr=Nmat)
+    Dendro.node[Dendro.root_node]['nnodes'] = Dendro.network_nodes
+    Dendro.node[Dendro.root_node]['n'] = nr_nodes
+
+    nr_groups = partition.max()+1
+    nodes_next_level = Dendro.add_children(Dendro.root_node, nr_groups)
+    Dendro.node[Dendro.root_node]['children'] = nodes_next_level
+
+    for i, n in enumerate(nodes_next_level):
+        subpart = partition == i
+        Dendro.node[n]['nnodes'] = subpart.nonzero()[0]
+        Dendro.node[n]['n'] = len(subpart.nonzero()[0])
+        Dendro.node[n]['children'] = []
+
+    return Dendro
+
 def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, max_depth=3):
     """ Recursively split graph into pieces by employing a spectral clustering strategy.
 
@@ -66,15 +105,10 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
 
             # cluster subgraph recursively
             partition = spectral.spectral_partition(Asub, mode=mode, num_groups=num_groups)
-            # print "PARTITION"
-            # print partition
 
             Emat, Nmat = compute_number_links_between_groups(Asub,partition)
             Dendro.node[node]['Er'] = Emat
             Dendro.node[node]['Nr'] = Nmat
-            # print "EMAT"
-            # print Emat
-            # print Dendro.node[0]['Er']
             nr_groups = np.unique(partition).size
 
             # print "NRG"
@@ -154,72 +188,3 @@ def create_partition_matrix_from_vector(partition_vec):
     partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
     return partition_matrix
 
-
-
-# Still in use somewhere???
-# def split_network_hierarchical_by_spectral_partition(A, mode='Lap', num_groups=2):
-    # """ Recursively split graph into pieces by employing a spectral clustering strategy.
-
-    # Inputs: A          -- input adjacency matrix
-            # mode       -- variant of spectral clustering to use (reg. Laplacian, Bethe Hessian, Non-Backtracking)
-            # num_groups -- in how many groups do we want to split the graph at each step
-                          # (default: 2; set to -1 to infer number of groups from spectrum)
-
-            # Output: networkx dendrogram
-    # """
-
-    # nr_nodes = A.shape[0]
-    # current_partition = spectral.hier_spectral_partition(A, mode=mode, num_groups=num_groups)
-
-    # # initialise networkx output dendrogram, and store some things as properties of the graph
-    # Dendro = GHRG()
-    # Dendro.network_nodes = np.arange(nr_nodes)
-    # Dendro.root_node = 0
-
-    # # create root node and assign properties
-    # Emat, Nmat = compute_number_links_between_groups(A,current_partition)
-    # Dendro.add_node(Dendro.root_node, Er=Emat, Nr=Nmat)
-    # # names of nodes corresponding to node in Dendrogram
-    # Dendro.node[Dendro.root_node]['nnodes'] = Dendro.network_nodes
-    # # number of nodes corresponding to this node
-    # Dendro.node[Dendro.root_node]['n'] = nr_nodes
-
-    # nr_groups = current_partition.max()+1
-    # nodes_next_level = Dendro.add_children(Dendro.root_node, nr_groups)
-    # Dendro.node[Dendro.root_node]['children'] = nodes_next_level
-
-    # for i, n in enumerate(nodes_next_level):
-        # subpart = current_partition == i
-        # Dendro.node[n]['nnodes'] = subpart.nonzero()[0]
-        # Dendro.node[n]['n'] = len(subpart.nonzero()[0])
-
-    # for node in nodes_next_level:
-            # # create subgraphs
-            # subpart = Dendro.node[node]['nnodes']
-            # Asub = A[subpart,:]
-            # Asub = Asub[:,subpart]
-
-            # partition = np.zeros(Asub.shape[0],dtype='int')
-            # Emat, Nmat = compute_number_links_between_groups(Asub,partition)
-            # Dendro.node[node]['Er'] = Emat
-            # Dendro.node[node]['Nr'] = Nmat
-            # Dendro.node[node]['children'] = []
-
-    # return Dendro
-
-#~ """From GHRG - Do we still need this?"""
-#~ def fitGHRG(input_network):
-    #~ A = input_network.to_scipy_sparse_matrix(input_network)
-
-    #~ D_inferred = spectral.split_network_by_recursive_spectral_partition(A,mode='Bethe',max_depth=-1,num_groups=-1)
-
-    #~ partitions= D_inferred.get_lowest_partition()
-    #~ K = partitions.max().astype('int')
-    #~ Di_nodes, Di_edges = D_inferred.construct_full_block_params()
-    #~ mergeList=ppool.createMergeList(Di_edges.flatten(),Di_nodes.flatten(),K)
-
-
-    #~ for blocks_to_merge in mergeList:
-        #~ D_inferred.insert_hier_merge_node(blocks_to_merge)
-
-    #~ return D_inferred
