@@ -19,15 +19,19 @@ Test change point detection
 def test_cp():
     #sliding window
     w=4
+    #degree
+    cm=20
     #before change model
-    D1=create2paramGHRG(100,10,0.5,1,2)
-    D1=create2paramGHRG(100,10,1,1,2)
+    D1=create2paramGHRG(100,cm,0.5,1,2)
+    #~ D1=create2paramGHRG(100,cm,1,1,2)
     #after change model
-    D2=create2paramGHRG(100,10,1,1,2)
+    D2=create2paramGHRG(100,cm,1,1,2)
     
     #create sequence of graphs
-    Gs=[D1.generateNetworkExactProb() for i in xrange(w)]
-    Gs.extend([D1.generateNetworkExactProb() for i in xrange(w)])
+    Gs=[D1.generateNetworkExactProb() for i in xrange(w+1)]
+    Gs.extend([D2.generateNetworkExactProb() for i in xrange(w+1)])
+    
+    print [len(G.edges()) for G in Gs]
     
     return cp.detectChanges_flat(Gs,w,mode='Lap')
     

@@ -211,6 +211,7 @@ class GHRG(nx.DiGraph):
 
         #cycle through nodes and generate edges
         for v in self.nodes_iter():
+            
             children=self.node[v]['children']
             Nr=self.node[v]['Nr']
             Er=self.node[v]['Er']
@@ -227,8 +228,8 @@ class GHRG(nx.DiGraph):
                     childj=self.node[v]
                 try:
                     if edgeProb=='beta':
-                        alpha=np.ones(Nr[ci,cj])+self.node[v]['Er'][ci,cj]
-                        beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-self.node[v]['Er'][ci,cj])
+                        alpha=np.ones(Nr[ci,cj])+Er[ci,cj]
+                        beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-Er[ci,cj])
                         p = np.random.beta(alpha,beta)
                     elif edgeProb=='exact':
                         p = Er[ci,cj]/Nr[ci,cj]
