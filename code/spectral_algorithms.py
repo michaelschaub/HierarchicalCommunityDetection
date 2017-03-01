@@ -584,9 +584,37 @@ def create_partition_matrix_from_vector(partition_vec):
     partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
     return partition_matrix
 
-#TODO: implement method for comparison
-def find_relevant_eigenvectors_Le_Levina(M, multiplier=5):
-    pass
+def find_relevant_eigenvectors_Le_Levina(A, t=5):
+    """ Find the relevant eigenvectors (of the Bethe Hessian) using the criteria proposed
+        by Le and Levina (2015)
+        """
+    # start by computing first Kest eigenvalues/vectors
+    Kest_pos = 10
+    if Kest_pos > A.shape[0]:
+        Kest_pos = A.shape[0]
+    ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(A,Kest_pos,which='SA')
+    relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
+    while (relevant_ev.size  == Kest_pos):
+        Kest_pos *=2
+        if Kest_pos > A.shape[0]:
+            Kest_pos = A.shape[0]
+        # print Kest_pos.shape
+        # print BH_pos.shape
+        ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(A,Kest_pos,which='SA')
+        relevant_ev = np.nonzero(ev_BH_pos <=0)[0]
+
+    ev_BH_pos.sort()
+    tev = t*ev_BH_pos
+    kmax = 0
+    for k in range(ev_BH_pos.size-1):
+        if tev[k] <= ev_BH_pos[k+1]:
+            kmax = k+1
+        else:
+            break
+
+    X = evecs_BH_pos[:,range(kmax)]
+
+    return ev_BH_pos[:kmax], X
 
 
 

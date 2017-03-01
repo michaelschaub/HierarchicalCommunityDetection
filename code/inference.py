@@ -81,6 +81,7 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
         subpart = current_partition == i
         Dendro.node[n]['nnodes'] = subpart.nonzero()[0]
         Dendro.node[n]['n'] = len(subpart.nonzero()[0])
+        Dendro.node[node]['children'] = []
 
     hier_depth = 0
     print "\nNow running recursion"
