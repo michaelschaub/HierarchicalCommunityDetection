@@ -277,6 +277,43 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
     return partition_vector
 
 ##########################################
+# X LAPLACIAN
+##########################################
+def cluster_with_XLaplacian(A, number_groups, learning_rate=5):
+    X = 0
+    LX = A + X
+    thres = 1/A.shape[0]
+    has_converged = False
+
+    while has_converged
+        Iratio_max = -999
+        index_max = -1
+        ev, evecs = scipy.sparse.linalg.eigsh(LX,number_groups,'LA')
+        for i in np.arange(number_groups):
+            Iratio = inverse_participation_ratio(evecs[:,i])
+            if Iratio > Iratio_max:
+                Iratio_max = Iratio
+                index_max = i
+
+        if Iratio_max < thres:
+            has_converged = True
+
+        else:
+            X = X - learning_rate*scipy.sparse.diags(np.power(evecs[:,index_max],2))
+            LX = A+X
+
+    clust = KMeans(n_clusters = num_groups)
+    clust.fit(evecs)
+    partition_vector = clust.labels_
+
+    return partition_vector, evecs
+
+
+def inverse_participation_ratio(vec)
+    return np.power(vec,4).sum()
+
+
+##########################################
 # SEIDEL LAPLACIAN
 ##########################################
 def create_seidel_lap_operator(A,rho=None):
