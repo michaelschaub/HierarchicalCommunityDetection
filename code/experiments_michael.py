@@ -30,7 +30,7 @@ def leto_experiment():
 
     D_inferred = inference.split_network_spectral_partition(A,mode='Bethe',num_groups=n_groups)
     Gnew= D_inferred.generateNetworkExactProb()
-    
+
     return snr, D_inferred, D_gen
 
 
@@ -42,7 +42,7 @@ to infer the true partition using spectral methods
 """
 def run_spectral_algorithms_hier(n_levels=2,groups_per_level=4):
     # mean degree number of nodes etc.
-    SNR = 1
+    SNR = 6
     n=1000
     K=groups_per_level**n_levels
     ratio = 0.5
@@ -76,6 +76,7 @@ def run_spectral_algorithms_hier(n_levels=2,groups_per_level=4):
     ol_score = metrics.overlap_score(pvecs[-1],partition_high)
     print "Partition into "+ str(np.max(pvecs[-1])+1) +" groups"
     print "OVERLAP SCORE Coarsest: ", ol_score, "\n\n"
+    return pvecs
 
 
 def test_spectral_algorithms_non_hier():
@@ -132,12 +133,12 @@ def run_spectral_algorithms_n_networks(n_groups=4):
 
 def run_spectral_algorithms_non_hier(n_groups=4):
     # mean degree and number of nodes etc.
-    n=1000
+    n=2000
     n_levels = 1
     K=n_groups**n_levels
     ratio = 0.4
 
-    SNR = np.arange(0.5,3,0.5)
+    SNR = np.arange(0.5,3,0.25)
     nsamples = 20
     overlap_Bethe = np.zeros((SNR.size,nsamples))
     overlap_Rohe = np.zeros((SNR.size,nsamples))

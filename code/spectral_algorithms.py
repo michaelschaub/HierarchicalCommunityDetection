@@ -14,8 +14,14 @@ def hier_spectral_partition(A,ma='BH_plus_Spectral',mz='Bethe'):
     pvec_agg = hier_spectral_partition_agglomerate(A,mode=ma)
     pvec_agg = expand_partitions_to_full_graph(pvec_agg)
     p0 = pvec_agg[0]
+    # print "ZOOM"
+    # print p0
+    # print "\n\n"
 
     pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=mz)
+    # print "ZOOM"
+    # print pvec_zoom
+    # print "\n\n"
 
     pvec_tot = pvec_zoom + pvec_agg
 
@@ -46,8 +52,9 @@ def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
 
         if pvec.max() != 0:
             print "RECURSIVE SPLIT FOUND", pvec.max()+1, "groups"
-            pzoom.append(pvec)
             partition = pvec
+            nc = pvec.max() + 1
+            pzoom.insert(0,pvec)
         else:
             keep_looping = False
 
@@ -285,7 +292,7 @@ def cluster_with_XLaplacian(A, number_groups, learning_rate=5):
     thres = 1/A.shape[0]
     has_converged = False
 
-    while has_converged
+    while has_converged:
         Iratio_max = -999
         index_max = -1
         ev, evecs = scipy.sparse.linalg.eigsh(LX,number_groups,'LA')
@@ -309,7 +316,7 @@ def cluster_with_XLaplacian(A, number_groups, learning_rate=5):
     return partition_vector, evecs
 
 
-def inverse_participation_ratio(vec)
+def inverse_participation_ratio(vec):
     return np.power(vec,4).sum()
 
 
@@ -461,7 +468,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
 
     max_k = Omega.shape[0]
     #TODO: we might want to adjust this later on
-    thres = 0.02
+    thres = 0.05
 
     if reg:
         # set tau to average degree
@@ -524,8 +531,8 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
         norm1 = scipy.linalg.norm(proj1)
         norm2 = scipy.linalg.norm(proj2)
         error = 0.5*(norm1+norm2)
-        # print "K, error: "
-        # print k, error
+        print "K, error: "
+        print k, error
         # Note that this should always be fulfilled at k=1
         if error < thres*max_k:
             print "Agglomerated into " + str(k) + " groups \n\n"
