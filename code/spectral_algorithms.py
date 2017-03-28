@@ -10,20 +10,20 @@ from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
 
-def hier_spectral_partition(A,ma='BH_plus_Spectral',mz='Bethe'):
-    pvec_agg = hier_spectral_partition_agglomerate(A,mode=ma)
-    pvec_agg = expand_partitions_to_full_graph(pvec_agg)
-    p0 = pvec_agg[0]
-    # print "ZOOM"
-    # print p0
-    # print "\n\n"
+def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe'):
 
-    pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=mz)
-    # print "ZOOM"
-    # print pvec_zoom
-    # print "\n\n"
+    # initial spectral clustering, performed according to method 'first pass'
+    p0 = spectral_partition(A,mode=first_pass,num_groups=-1)
 
-    pvec_tot = pvec_zoom + pvec_agg
+    # try to refine this partition as much as possible
+    pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=method_zoom)
+    print "ZOOM RESULTS:"
+    print pvec_zoom
+    print "\n\n"
+
+    # agglomerate builds list of all partitions
+    pvec_agg = hier_spectral_partition_agglomerate(A,pvec_zoom, mode=method_agg)
+    pvec_tot = expand_partitions_to_full_graph(pvec_agg)
 
     return pvec_tot
 
@@ -31,7 +31,6 @@ def hier_spectral_partition(A,ma='BH_plus_Spectral',mz='Bethe'):
 def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
     nc = np.max(partition)+1
 
-    pzoom = []
     keep_looping = True
     print "RECURSIVE SPLITTING"
     while keep_looping:
@@ -54,34 +53,19 @@ def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
             print "RECURSIVE SPLIT FOUND", pvec.max()+1, "groups"
             partition = pvec
             nc = pvec.max() + 1
-            pzoom.insert(0,pvec)
         else:
             keep_looping = False
 
-    return pzoom
+    return partition
 
 
-def hier_spectral_partition_agglomerate(A, mode="BH_plus_Spectral"):
-    """Performs spectral clustering and hierarchical agglomeration based on the provided mode parameter"""
+def hier_spectral_partition_agglomerate(A, partition, mode="Lap"):
+    """Performs hierarchical agglomeration of adjacency matrix and provided partition,
+        based on the provided mode parameter"""
 
-    if mode == "BH_plus_Spectral":
-        first_round_method = 'Bethe'
-        first_round_num_groups = -1
-        method_agglomeration = "Lap"
-        model_select_agglomeration = 'spectral'
-
-    elif mode == "LS_plus_Spectral":
-        first_round_method = 'SeidelLap'
-        first_round_num_groups = -1
-        method_agglomeration = "Lap"
-        model_select_agglomeration = 'spectral'
-
-    #FIRST RUN --- try to partition the graph
     pvec = []
-    partition = spectral_partition(A,mode=first_round_method,num_groups=first_round_num_groups)
-
-    #STORE RESULTS
     pvec.append(partition)
+
     k = np.max(partition)+1
     k0 =k
     print "HIER SPECTRAL PARITION -- agglomerative\n Initial partition into", k0, "groups \n"
@@ -90,7 +74,7 @@ def hier_spectral_partition_agglomerate(A, mode="BH_plus_Spectral"):
         A = links_between_groups
         # print "Aggregated network:"
         # print links_between_groups
-        if method_agglomeration == "Lap":
+        if mode == "Lap":
             k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups)
         else:
             pass
@@ -209,7 +193,7 @@ def build_weighted_BetheHessian(A,r):
 
     # second matrix
     rA_data = r*A.data / (r*r - A2data)
-    rA = scipy.sparse.csr_matrix((rA_data,A.nonzero()))
+    rA = scipy.sparse.csr_matrix((rA_data,A.nonzero()),shape=A.shape)
 
     # full Bethe Hessian
     BHw = DD - rA
@@ -463,12 +447,10 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 ##################################################
 
 def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
-    #TODO: atm this uses just the standard laplacian which should concentrate as we are
-    # in the aggregated regime
 
     max_k = Omega.shape[0]
     #TODO: we might want to adjust this later on
-    thres = 0.05
+    thres = 0.02
 
     if reg:
         # set tau to average degree
@@ -513,7 +495,8 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
             V = evecs[:,:k]
             # print "V"
             # print V
-            X = preprocessing.normalize(V, axis=1, norm='l2')
+            # X = preprocessing.normalize(V, axis=1, norm='l2')
+            X = V
             clust = KMeans(n_clusters = k)
             clust.fit(X)
             partition_vec = clust.labels_

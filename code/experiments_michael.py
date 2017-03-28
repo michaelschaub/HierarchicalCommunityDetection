@@ -40,12 +40,12 @@ Experiment: Test Spectral inference algorithm on hierarchical test graph
 Create a sequence of test graphs (realizations of a specified hier. random model) and try
 to infer the true partition using spectral methods
 """
-def run_spectral_algorithms_hier(n_levels=2,groups_per_level=4):
+def run_spectral_algorithms_hier(n_levels=3,groups_per_level=4):
     # mean degree number of nodes etc.
-    SNR = 6
-    n=1000
+    SNR = 9
+    n=10000
     K=groups_per_level**n_levels
-    ratio = 0.5
+    ratio = 0.1
 
     D_gen=create2paramGHRG(n,SNR,ratio,n_levels,groups_per_level)
     G=D_gen.generateNetworkExactProb()
