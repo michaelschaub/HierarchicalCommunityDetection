@@ -17,42 +17,63 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
 
     # try to refine this partition as much as possible
     pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=method_zoom)
-    print "ZOOM RESULTS:"
-    print pvec_zoom
-    print "\n\n"
+    # print "ZOOM RESULTS:"
+    # print pvec_zoom
+    # print "\n\n"
 
     # agglomerate builds list of all partitions
     pvec_agg = hier_spectral_partition_agglomerate(A,pvec_zoom, mode=method_agg)
+    print "Aggregation RESULTS:"
+    print pvec_agg
+    print "\n\n"
     pvec_tot = expand_partitions_to_full_graph(pvec_agg)
 
     return pvec_tot
 
 
 def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
+    """
+    Given a A graph and an initial partition, try to find the best possible refinement
+    of this partition by recursively splitting each block according to a chosen method.
+    Return the finest possible partition found in this way.
+    """
+
+    # find number of communities in present partition
     nc = np.max(partition)+1
 
     keep_looping = True
     print "RECURSIVE SPLITTING"
     while keep_looping:
-        max_k = 0
+
+        # highest index of a group in the global partition
+        max_k = -1
+        # new global partition vector
         pvec = np.zeros_like(partition)
 
         for ii in xrange(nc):
+            # split graph into subparts
             Anew = A[:,partition==ii]
             Anew = Anew[partition==ii,:]
 
+            # get a partition for each subpart
             pnew = spectral_partition(Anew,mode,zgroups)
-            if pvec.max() == 0:
-                pvec[partition==ii] = pnew + max_k
+
+            # if this is the first partition we look at just assign it
+            if max_k == -1:
+                pvec[partition==ii] = pnew
                 max_k = pvec.max()
+            # if it is not the first, the indices need to start at max_k + 1
             else:
                 pvec[partition==ii] = pnew + max_k + 1
                 max_k = pvec.max()
 
-        if pvec.max() != 0:
+        # if there has been a change in the partition compared to before, this means
+        # we found a recursive split and we should keep going
+        if np.any(partition != pvec):
             print "RECURSIVE SPLIT FOUND", pvec.max()+1, "groups"
             partition = pvec
             nc = pvec.max() + 1
+        # no change? stop trying to refine
         else:
             keep_looping = False
 
@@ -505,7 +526,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
 
             H = create_partition_matrix_from_vector(partition_vec)
             H = Dtau_sqrt_inv.dot(H)
-            H = preprocessing.normalize(H,axis=0,norm='l2')
+            # H = preprocessing.normalize(H,axis=0,norm='l2')
         else:
             error('something went wrong. Please specify valid mode')
 
