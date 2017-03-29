@@ -51,21 +51,18 @@ def fraction_correctly_aligned(partition1,partition2):
 
     return cost
 
-def overlap_score(partition1, partition2):
+def overlap_score(partition, true_partition):
     """
     Compare the overlap score as defined, e.g., in Krzakala et al's spectral redemption paper
     """
-    raw_overlap = fraction_correctly_aligned(partition1, partition2)
-    num_nodes = partition1.size
-    num_groups = partition1.max() +1
-    num_groups2 = partition2.max() +1
+    raw_overlap = fraction_correctly_aligned(partition, true_partition)
+    num_nodes = partition.size
+    num_groups = true_partition.max() +1
+    num_groups2 = partition.max() +1
 
     # TODO: this might not be necessary!? See below
     if num_groups2 != num_groups:
         print "partitions with different number of groups are prepared! Please prepare the results accordingly"
-
-    if num_groups < num_groups2:
-        num_groups = num_groups2
 
     overlap_score  = (raw_overlap/num_nodes - 1/num_groups)/(1-1/num_groups)
     return overlap_score

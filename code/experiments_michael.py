@@ -5,6 +5,7 @@ import metrics
 import numpy as np
 import scipy
 from matplotlib import pyplot as plt
+import random
 
 np.set_printoptions(precision=4,linewidth=200)
 
@@ -34,16 +35,52 @@ def leto_experiment():
     return snr, D_inferred, D_gen
 
 
+def run_spectral_algorithms_hier_zoom_test(n_levels=5,groups_per_level=2):
+    random.seed(12345)
+    # mean degree number of nodes etc.
+    SNR = 3
+    n=2**13
+    K=groups_per_level**n_levels
+    ratio = 0.1
+
+    D_gen=create2paramGHRG(n,SNR,ratio,n_levels,groups_per_level)
+    G=D_gen.generateNetworkExactProb()
+    A = D_gen.to_scipy_sparse_matrix(G)
+    # plt.figure()
+    # plt.spy(A,markersize=0.5)
+
+    pvec = spectral.spectral_partition(A,'Bethe',-1)
+    # plt.figure()
+    # plt.plot(pvec,marker='s')
+
+    partition_true = D_gen.get_lowest_partition()
+    partition_high = D_gen.partition_level(0)
+
+    ol_score = metrics.overlap_score(pvec,partition_true)
+    print "Partition into "+ str(np.max(pvec)+1) +" groups"
+    print "OVERLAP SCORE (SINGLE LAYER INFERENCE): ", ol_score, "\n\n"
+
+
+    pvecs = spectral.hier_spectral_partition_zoom_in(A,pvec)
+    print pvecs
+
+    ol_score = metrics.overlap_score(pvecs,partition_true)
+    print "Partition into "+ str(np.max(pvecs)+1) +" groups"
+    print "OVERLAP SCORE Finest: ", ol_score, "\n\n"
+
+
+    return pvecs
+
 """
 Experiment: Test Spectral inference algorithm on hierarchical test graph
 
 Create a sequence of test graphs (realizations of a specified hier. random model) and try
 to infer the true partition using spectral methods
 """
-def run_spectral_algorithms_hier(n_levels=2,groups_per_level=4):
+def run_spectral_algorithms_hier(n_levels=3,groups_per_level=4):
     # mean degree number of nodes etc.
-    SNR = 9
-    n=2**10
+    SNR = 5
+    n=2**12
     K=groups_per_level**n_levels
     ratio = 0.1
 
@@ -133,7 +170,7 @@ def run_spectral_algorithms_n_networks(n_groups=4):
 
 def run_spectral_algorithms_non_hier(n_groups=4):
     # mean degree and number of nodes etc.
-    n=2000
+    n=1000
     n_levels = 1
     K=n_groups**n_levels
     ratio = 0.4

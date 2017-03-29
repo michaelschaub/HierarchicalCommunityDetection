@@ -6,6 +6,7 @@ import scipy.sparse.linalg as linalg
 import networkx as nx
 from sklearn.cluster import KMeans
 from sklearn import preprocessing
+from sklearn import mixture
 from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
@@ -23,9 +24,9 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
 
     # agglomerate builds list of all partitions
     pvec_agg = hier_spectral_partition_agglomerate(A,pvec_zoom, mode=method_agg)
-    print "Aggregation RESULTS:"
-    print pvec_agg
-    print "\n\n"
+    # print "Aggregation RESULTS:"
+    # print pvec_agg
+    # print "\n\n"
     pvec_tot = expand_partitions_to_full_graph(pvec_agg)
 
     return pvec_tot
@@ -103,6 +104,7 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap"):
             pvec.append(partition)
 
 
+    partition = relabel_partition_vec(partition)
     return pvec
 
 
@@ -238,14 +240,15 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
 
     # construct both the positive and the negative variant of the BH
     if not all(A.sum(axis=1)):
-        print "GRAPH CONTAINS NODES WITH DEGREE ZERO"
+        # print "GRAPH CONTAINS NODES WITH DEGREE ZERO"
+        pass
 
     if all(A.sum(axis=1) == 0):
-        print "empty Graph -- return all in one partition"
+        # print "empty Graph -- return all in one partition"
         partition_vector = np.zeros(A.shape[0],dtype='int')
         return partition_vector
 
-    if mode == 'unweighted':
+    if mode == 'weighted':
         BH_pos = build_BetheHessian(A,r)
         BH_neg = build_BetheHessian(A,-r)
     elif mode == 'weighted':
@@ -257,14 +260,18 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
 
 
     if num_groups ==-1:
-        relevant_ev, _ = find_negative_eigenvectors(BH_pos)
+        relevant_ev, lambda1 = find_negative_eigenvectors(BH_pos)
         X = relevant_ev
 
-        relevant_ev, _ = find_negative_eigenvectors(BH_neg)
+        relevant_ev, lambda2 = find_negative_eigenvectors(BH_neg)
         X = np.hstack([X, relevant_ev])
+        # print X.shape
+        # print "Xvectors"
+        # print X
         num_groups = X.shape[1]
+        num_samples = X.shape[0]
 
-        if num_groups == 0:
+        if num_groups == 0 or num_samples < num_groups:
             print "no indication for grouping -- return all in one partition"
             partition_vector = np.zeros(A.shape[0],dtype='int')
             return partition_vector
@@ -348,6 +355,7 @@ def create_seidel_lap_operator(A,rho=None):
 
     LS = LinearOperator((n,n),matvec=seidel_lap_mat_vec)
     return LS, Ds_invs
+
 
 def cluster_with_SLaplacian_simple(A,num_groups,rho=None):
     # compute eigenvalues and eigenvectors (sorted according to smallest)
@@ -486,7 +494,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     L = Dtau_sqrt_inv.dot(L.T).T
     L = (L+L.T)/2
 
-    #NOTE: THIS is not a Laplacian but the normalized adjacency of Rohe et al..
+    #THIS is not a Laplacian but the normalized adjacency of Rohe et al..
     ev, evecs = scipy.linalg.eigh(L)
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
@@ -535,11 +543,11 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
         norm1 = scipy.linalg.norm(proj1)
         norm2 = scipy.linalg.norm(proj2)
         error = 0.5*(norm1+norm2)
-        print "K, error: "
-        print k, error
+        # print "K, error: "
+        # print k, error
         # Note that this should always be fulfilled at k=1
         if error < thres*max_k:
-            print "Agglomerated into " + str(k) + " groups \n\n"
+            # print "Agglomerated into " + str(k) + " groups \n\n"
             return k, partition_vec, H, error
 
     #TEST if there are indications for final/global agglomeration
@@ -701,13 +709,29 @@ def compute_number_links_between_groups(A,partition_vec):
     return links_between_groups, possible_links_between_groups
 
 def expand_partitions_to_full_graph(pvecs):
+    """
+    Map aggregated partition vectors to full-sized partition vectors
+    """
+
+    # partiitions are stored relative to the size of the aggregated graph, so we have to
+    # expand them again into the size of the full graph
+
+    # the fines partition is already at the required size
     pvec_new = []
     pvec_new.append(pvecs[0])
 
+    # loop over all other partition
     for i in xrange(len(pvecs)-1):
-        pold = pvecs[i]
-        pnew = pvecs[i+1]
-        partition = pnew[pold]
+        # get the partition from the previous level
+        p_full_prev_level = pvec_new[i]
+
+        # get aggregated partition from this level
+        p_agg_this_level = pvecs[i+1]
+
+        # group indices of previous level correspond to nodes in the aggregated graph;
+        # get the group ids of those nodes, and expand by reading out one index per
+        # previous node
+        partition = p_agg_this_level[p_full_prev_level]
         pvec_new.append(partition)
 
     return pvec_new
