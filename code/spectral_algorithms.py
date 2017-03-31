@@ -103,8 +103,6 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap"):
         if partition is not None:
             pvec.append(partition)
 
-
-    partition = relabel_partition_vec(partition)
     return pvec
 
 
@@ -479,7 +477,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
 
     max_k = Omega.shape[0]
     #TODO: we might want to adjust this later on
-    thres = 0.02
+    thres = 0.05
 
     if reg:
         # set tau to average degree
@@ -502,7 +500,6 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     # print "evec_sorted"
     # print evecs
 
-    #TODO: check all these cases carefully!
     for k in xrange(max_k-1,1,-1):
         if mode == 'DCSBM':
             V = evecs[:,:k]
@@ -518,14 +515,13 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
             H = create_partition_matrix_from_vector(partition_vec)
             Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
             H = Dtau_sqrt.dot(H)
-            H = preprocessing.normalize(H,axis=0,norm='l2')
 
         elif mode == 'SBM':
             V = evecs[:,:k]
             # print "V"
             # print V
             # X = preprocessing.normalize(V, axis=1, norm='l2')
-            X = V
+            X = Dtau_sqrt_inv* V
             clust = KMeans(n_clusters = k)
             clust.fit(X)
             partition_vec = clust.labels_
@@ -533,21 +529,23 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
             # print partition_vec
 
             H = create_partition_matrix_from_vector(partition_vec)
-            H = Dtau_sqrt_inv.dot(H)
-            # H = preprocessing.normalize(H,axis=0,norm='l2')
+            # H = Dtau_sqrt_inv.dot(H)
         else:
             error('something went wrong. Please specify valid mode')
 
+        H = preprocessing.normalize(H,axis=0,norm='l2')
         proj1 = project_orthogonal_to(H,V)
         proj2 = project_orthogonal_to(V,H)
         norm1 = scipy.linalg.norm(proj1)
         norm2 = scipy.linalg.norm(proj2)
+        print "\n\nNorms"
+        print norm1, norm2
         error = 0.5*(norm1+norm2)
-        # print "K, error: "
-        # print k, error
+        print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
+        print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
         # Note that this should always be fulfilled at k=1
-        if error < thres*max_k:
-            # print "Agglomerated into " + str(k) + " groups \n\n"
+        if thres > error / np.sqrt(max_k):
+            print "Agglomerated into " + str(k) + " groups \n\n"
             return k, partition_vec, H, error
 
     #TEST if there are indications for final/global agglomeration
@@ -556,7 +554,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
     AH = Omega.sum(axis=1) / np.sqrt(max_k)
     HHpAH = np.ones_like(AH)*AH.mean()
     error = scipy.linalg.norm(AH - HHpAH)
-    if error < thres*max_k:
+    if thres > error/np.sqrt(max_k):
         partition_vec = np.zeros((1,max_k))
         H = create_partition_matrix_from_vector(partition_vec)
         k = 1

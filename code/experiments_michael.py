@@ -34,6 +34,48 @@ def leto_experiment():
 
     return snr, D_inferred, D_gen
 
+def run_spectral_algorithms_hier_agg_test(n_levels=4,groups_per_level=2):
+    random.seed(12345)
+    # mean degree number of nodes etc.
+    SNR = 9
+    n=2**13
+    K=groups_per_level**n_levels
+    ratio = 0.1
+
+    D_gen=create2paramGHRG(n,SNR,ratio,n_levels,groups_per_level)
+    G=D_gen.generateNetworkExactProb()
+    A = D_gen.to_scipy_sparse_matrix(G)
+    # plt.figure()
+    # plt.spy(A,markersize=0.5)
+
+    pvec = spectral.spectral_partition(A,'Bethe',-1)
+    # plt.figure()
+    # plt.plot(pvec,marker='s')
+
+    partition_true = D_gen.get_lowest_partition()
+    partition_coarse = D_gen.partition_level(0)
+    print partition_coarse
+
+    ol_score = metrics.overlap_score(pvec,partition_true)
+    print "Partition into "+ str(np.max(pvec)+1) +" groups"
+    print "OVERLAP SCORE (SINGLE LAYER INFERENCE): ", ol_score, "\n\n"
+
+
+    pvecs = spectral.hier_spectral_partition_agglomerate(A,pvec)
+    pvecs = spectral.expand_partitions_to_full_graph(pvecs)
+    print "RESULTS AGGLOMERATION PHASE"
+    print pvecs
+
+    ol_score = metrics.overlap_score(pvecs[0],partition_true)
+    print "Partition into "+ str(np.max(pvecs[0])+1) +" groups"
+    print "OVERLAP SCORE Finest: ", ol_score, "\n\n"
+
+    ol_score = metrics.overlap_score(pvecs[-1],partition_coarse)
+    print "Partition into "+ str(np.max(pvecs[-1])+1) +" groups"
+    print "OVERLAP SCORE Coarsest: ", ol_score, "\n\n"
+
+
+    return pvecs
 
 def run_spectral_algorithms_hier_zoom_test(n_levels=5,groups_per_level=2):
     random.seed(12345)
@@ -67,7 +109,6 @@ def run_spectral_algorithms_hier_zoom_test(n_levels=5,groups_per_level=2):
     ol_score = metrics.overlap_score(pvecs,partition_true)
     print "Partition into "+ str(np.max(pvecs)+1) +" groups"
     print "OVERLAP SCORE Finest: ", ol_score, "\n\n"
-
 
     return pvecs
 
@@ -260,6 +301,9 @@ def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
         # Omega is assigned on a block level, i.e. for each level we have one omega array
         # this assumes a perfect hierarchy with equal depth everywhere
         omega[level] = np.ones((groups_per_level,groups_per_level))*cout/n_this_level + np.eye(groups_per_level)*(cin/n_this_level-cout/n_this_level)
+        if np.any(omega[level]>=1):
+            print "no probability > 1 not allowed"
+            raise ValueError("Something wrong")
         n_this_level = n_this_level / float(groups_per_level)
         if np.floor(n_this_level) != n_this_level:
             print "Rounding number of nodes"
