@@ -10,6 +10,104 @@ import model_selection as ppool
 import change_points as cp
 from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 plt.ion()
+import metrics
+from random import sample
+
+
+"""
+Test overlap precision and recall
+"""
+def test_pr1():
+    reps=20
+    n=800
+    
+    true_pvecs=np.zeros((2,n))
+    true_pvecs[0,n/2:]=1
+    for i in xrange(8):
+        true_pvecs[1,(i*100):(i+1)*(100)]=i
+    
+    precision=np.zeros(40)
+    recall=np.zeros(40)
+    for rep in xrange(reps):
+        for li,l in enumerate(xrange(0,n,20)):
+            print "l",l
+            pvecs=true_pvecs.copy()
+            inds=sample(xrange(n),l)
+            _,new_values=np.random.multinomial(1,np.ones(8)/8,size=l).nonzero()
+            pvecs[1,inds]=new_values
+            pvecs[0,inds]=np.int32(new_values>3)
+        
+            sm=metrics.calculate_level_comparison_matrix(pvecs,true_pvecs)
+            p,r=metrics.calculate_precision_recall(sm)
+            precision[li]+=p/reps
+            recall[li]+=r/reps
+    
+    plt.figure()
+    plt.plot(np.arange(0,n,20),precision,'b-.')
+    plt.plot(np.arange(0,n,20),recall,'r--')
+    
+
+def test_pr2():
+    reps=20
+    n=800
+    
+    pred_pvecs=np.zeros((2,n))
+    pred_pvecs[0,n/2:]=1
+    for i in xrange(8):
+        pred_pvecs[1,(i*100):(i+1)*(100)]=i
+        
+    true_pvecs=np.zeros((4,n))
+    true_pvecs[0,n/2:]=1
+    for i in xrange(4):
+        true_pvecs[1,(i*200):(i+1)*(200)]=i
+    for i in xrange(8):
+        true_pvecs[2,(i*100):(i+1)*(100)]=i
+    for i in xrange(16):
+        true_pvecs[3,(i*50):(i+1)*(50)]=i
+    
+    
+    precision=np.zeros(40)
+    recall=np.zeros(40)
+    for rep in xrange(reps):
+        for li,l in enumerate(xrange(0,n,20)):
+            print "l",l
+            pvecs=pred_pvecs.copy()
+            inds=sample(xrange(n),l)
+            _,new_values=np.random.multinomial(1,np.ones(8)/8,size=l).nonzero()
+            pvecs[1,inds]=new_values
+            pvecs[0,inds]=new_values//4
+            
+            sm=metrics.calculate_level_comparison_matrix(pvecs,true_pvecs)
+            p,r=metrics.calculate_precision_recall(sm)
+            precision[li]+=p/reps
+            recall[li]+=r/reps
+    
+    plt.figure()
+    plt.plot(np.arange(0,n,20),precision,'b-.')
+    plt.plot(np.arange(0,n,20),recall,'r--')
+    
+    precision=np.zeros(40)
+    recall=np.zeros(40)
+    for rep in xrange(reps):
+        for li,l in enumerate(xrange(0,n,20)):
+            print "l",l
+            pvecs=true_pvecs.copy()
+            inds=sample(xrange(n),l)
+            _,new_values=np.random.multinomial(1,np.ones(16)/16,size=l).nonzero()
+            pvecs[3,inds]=new_values
+            pvecs[2,inds]=new_values//2
+            pvecs[1,inds]=new_values//4
+            pvecs[0,inds]=new_values//8
+        
+            sm=metrics.calculate_level_comparison_matrix(pvecs,pred_pvecs)
+            p,r=metrics.calculate_precision_recall(sm)
+            precision[li]+=p/reps
+            recall[li]+=r/reps
+    
+    plt.figure()
+    plt.plot(np.arange(0,n,20),precision,'b-.')
+    plt.plot(np.arange(0,n,20),recall,'r--')
+
 
 
 
