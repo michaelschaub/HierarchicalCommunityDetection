@@ -269,6 +269,16 @@ def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
 
     return a, b
 
+def calculateDegreesFromAvDegAndSNR(SNR,av_deg,num_cluster=2):
+    # SNR, a= in-weight, b = out-weight
+    # SNR = (a-b)^2 / (ka + k(k-1)*b) = (a-b)^2 / [k^2 *av_degree]
+    # av_degree = a/k + (k-1)*b/k = a-b /k + b
+    amb = num_cluster * np.sqrt(av_degree*SNR)
+    b = av_degree - amb/float(num_cluster)
+    a = amb + b
+
+    return a, b
+
 def expand_partitions_to_full_graph(pvecs):
     pvec_new = []
     pvec_new.append(pvecs[0])
@@ -348,3 +358,78 @@ def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
 
 
     return D
+
+def sample_hier_block_model(groups_per_level = [2, 4], nnodes = 1000,
+                            rel_sizes_level=None, av_deg=10, snr=5):
+    """
+    Function to sample from a hierarchical blockmodel according to a given specification
+    Inputs:
+        groups_per_level -- number of splits in each level of the hierarchy,
+                            e.g. [2, 3] implies a split of two 'meta-communities' into
+                            three groups each
+        nnodes -- number of nodes in the network total
+        rel_sizes_level -- within each level how balanced should the groups be. A
+                           setting of 1/l, where l is the number of groups in this level implies balanced groups. If None provided, groups will be
+                           balanced.
+        av_deg -- average degree in the network
+        snr -- signal to noise ratio within each level
+    """
+
+    nr_levels = len(groups_per_level)
+
+    for _level in xrange(nr_levels):
+        # split nodes into groups
+        nodes_per_group =
+        a, b = calculateDegreesFromAvDegAndSNR(snr,av_deg,num_cluster=groups_per_level[_level]):
+        omega = np.eye(num_cluster)
+        #TODO...
+
+
+
+
+
+
+def sample_block_model(omega, nc, mode = 'undirected'):
+    """
+    Sample from a blockmodel, given the affinity matrix omega, and the number of nodes
+    per group.
+
+    Input:
+        omega -- affinity matrix
+        nc -- number of nodes per group
+
+    Output:
+        A -- sampled adjacency matrix
+    """
+
+    ni, nj = omega.shape
+
+    if mode == 'undirected' and not np.all(omega.T == omega):
+        raise Exception("You should provide a symmetric affinity matrix")
+
+    rowlist = []
+    for i in xrange(ni):
+        collist = []
+        for j in xrange(nj):
+            pij = omega[i,j]
+            print pij
+            A1  = sample_from_block(nc[i],nc[j],pij)
+            collist.append(A1)
+        A1 = scipy.sparse.hstack(collist)
+        rowlist.append(A1)
+
+    A = scipy.sparse.vstack(rowlist)
+
+    if mode == 'undirected':
+        A = scipy.sparse.triu(A,k=1)
+        A = A + A.T
+
+    return A
+
+def sample_from_block(m,n,pij):
+    if pij == 0:
+        block = scipy.sparse.csr_matrix((m,n))
+    else:
+        block = (scipy.sparse.random(m,n,density=pij) >0)*1
+    return block
+

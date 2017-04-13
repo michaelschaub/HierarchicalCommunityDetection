@@ -52,7 +52,7 @@ def fraction_correctly_aligned(partition1,partition2):
     return cost
 
 
-def calculate_level_comparison_matrix(pvecs,true_pvecs,score=overlap_score):
+def calculate_level_comparison_matrix(pvecs,true_pvecs,score='overlap_score'):
     """
     Compare the partition at each level of a heirarchy with each level of the true hierarchy.
     Default score is the overlap_score.
@@ -65,10 +65,10 @@ def calculate_level_comparison_matrix(pvecs,true_pvecs,score=overlap_score):
     for i in xrange(pred_lvls):
         for j in xrange(true_lvls):
             score_matrix[i,j]=overlap_score(pvecs[i],true_pvecs[j])
-    
+
     return score_matrix
-    
-    
+
+
 def calculate_precision_recall(score_matrix):
     """
     Calculates the hierarchy precision and recall from a score matrix
@@ -77,7 +77,7 @@ def calculate_precision_recall(score_matrix):
     recall = np.max(score_matrix,0).sum()/true_lvls
     precision = np.max(score_matrix,1).sum()/pred_lvls
     return precision, recall
-    
+
 
 
 def overlap_score(partition, true_partition):
