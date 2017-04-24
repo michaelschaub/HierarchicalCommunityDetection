@@ -36,7 +36,7 @@ def leto_experiment():
 
     return snr, D_inferred, D_gen
 
-def run_spectral_algorithms_hier_agg_test(n_levels=4,groups_per_level=2):
+def test_spectral_algorithms_hier_agg(n_levels=4,groups_per_level=2):
     random.seed(12345)
     # mean degree number of nodes etc.
     SNR = 9
@@ -79,7 +79,7 @@ def run_spectral_algorithms_hier_agg_test(n_levels=4,groups_per_level=2):
 
     return pvecs
 
-def run_spectral_algorithms_hier_zoom_test(n_levels=5,groups_per_level=2):
+def test_spectral_algorithms_hier_zoom(n_levels=5,groups_per_level=2):
     random.seed(12345)
     # mean degree number of nodes etc.
     SNR = 3
@@ -120,43 +120,36 @@ Experiment: Test Spectral inference algorithm on hierarchical test graph
 Create a sequence of test graphs (realizations of a specified hier. random model) and try
 to infer the true partition using spectral methods
 """
-def run_spectral_algorithms_hier(n_levels=3,groups_per_level=4):
+def test_spectral_algorithms_hier(n_levels=3,groups_per_level=4):
     # mean degree number of nodes etc.
-    SNR = 5
-    n=2**12
-    K=groups_per_level**n_levels
-    ratio = 0.1
+    SNR = 3
+    n=2**14
 
-    D_gen=create2paramGHRG(n,SNR,ratio,n_levels,groups_per_level)
-    G=D_gen.generateNetworkExactProb()
-    A = D_gen.to_scipy_sparse_matrix(G)
+    # sample hier block model
+    groups_per_level = np.array([2,2])
+    A, pvecs_true = sample_networks.sample_hier_block_model(groups_per_level, av_deg = 15, nnodes=n, snr=SNR)
+
     # plt.figure()
-    # plt.spy(A,markersize=0.5)
+    # plt.spy(A,markersize=1)
+    print "Average degree"
+    print A.sum(axis=1).mean()
 
     pvec = spectral.spectral_partition(A,'Bethe',-1)
     # plt.figure()
     # plt.plot(pvec,marker='s')
 
-    partition_true = D_gen.get_lowest_partition()
-    partition_high = D_gen.partition_level(0)
-
-    ol_score = metrics.overlap_score(pvec,partition_true)
+    ol_score = metrics.overlap_score(pvec,pvecs_true[-1])
     print "Partition into "+ str(np.max(pvec)+1) +" groups"
     print "OVERLAP SCORE (SINGLE LAYER INFERENCE): ", ol_score, "\n\n"
 
 
-    pvecs = spectral.hier_spectral_partition(A)
-    print pvecs
-
-    ol_score = metrics.overlap_score(pvecs[0],partition_true)
-    print "Partition into "+ str(np.max(pvecs[0])+1) +" groups"
-    print "OVERLAP SCORE Finest: ", ol_score, "\n\n"
+    print "\n\n Hier Partitioning\n"
+    pvecs_inferred = spectral.hier_spectral_partition(A)
+    ol_score = metrics.calculate_level_comparison_matrix(pvecs_inferred,pvecs_true)
+    print "\n\nOVERLAP SCORE\n", ol_score, "\n\n"
 
 
-    ol_score = metrics.overlap_score(pvecs[-1],partition_high)
-    print "Partition into "+ str(np.max(pvecs[-1])+1) +" groups"
-    print "OVERLAP SCORE Coarsest: ", ol_score, "\n\n"
-    return pvecs
+    return pvecs_inferred
 
 
 def test_spectral_algorithms_non_hier():

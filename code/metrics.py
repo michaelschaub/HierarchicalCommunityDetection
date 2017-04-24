@@ -50,7 +50,7 @@ def fraction_correctly_aligned(partition1,partition2):
     cost = -cost_matrix[row_ind, col_ind].sum()
 
     return cost
-    
+
 
 def overlap_score(partition, true_partition):
     """
@@ -60,7 +60,7 @@ def overlap_score(partition, true_partition):
     num_nodes = partition.size
     num_groups = true_partition.max() +1
     num_groups2 = partition.max() +1
-    print raw_overlap/num_nodes
+    # print raw_overlap/num_nodes
 
     # TODO: this might not be necessary!? See below
     if num_groups2 != num_groups:

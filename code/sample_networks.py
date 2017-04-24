@@ -86,7 +86,13 @@ def sample_hier_block_model(groups_per_level = np.array([2,4]), nnodes = 1000, a
 
 
     A = sample_block_model(Omega,nc, mode='undirected')
-    return A
+    pvecs = []
+    nnodes = nc.sum()
+    for i in range(groups_per_level.size):
+        partition  = np.kron(np.arange(nr_groups_til_level[i]),np.ones(nnodes/nr_groups_til_level[i]))
+        pvecs.append(partition)
+
+    return A, pvecs
 
 def matrix_fill_in_diag_block(diaA,B):
     """
