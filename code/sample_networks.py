@@ -1,3 +1,4 @@
+from __future__ import division
 from GHRGmodel import GHRG
 import numpy as np
 import scipy
@@ -26,6 +27,24 @@ def calculateDegreesFromAvDegAndSNR(SNR,av_degree,num_cluster=2):
 
     return a, b
 
+def checkDetectabliityGeneralSBM(omega,nc):
+    """
+    Given a SBM with affinity matrix omega and group size distribuution nc, compute
+    whether there is something detectable here.
+    """
+
+    # form matrix M
+    M = omega.dot(np.diag(nc,0))
+    u = scipy.linalg.eig(M)
+    idx = u.argsort()[::-1]
+    eigenvalues = u[idx]
+
+    snr = eigenvalues[1]**2 / eigenvalues[0]
+
+    return snr
+
+
+
 def expand_partitions_to_full_graph(pvecs):
     pvec_new = []
     pvec_new.append(pvecs[0])
@@ -39,7 +58,7 @@ def expand_partitions_to_full_graph(pvecs):
     return pvec_new
 
 
-def sample_hier_block_model(groups_per_level = np.array([2,4]), nnodes = 1000, av_deg=10, snr=8):
+def sample_hier_block_model(groups_per_level = np.array([2,4]), nnodes = 1000, av_deg=10, snr=8, group_sizes ='same'):
     """
     Function to sample from a hierarchical blockmodel with equal sized groups according
     to a given specification
@@ -51,6 +70,8 @@ def sample_hier_block_model(groups_per_level = np.array([2,4]), nnodes = 1000, a
         av_deg -- average degree in the network
 
         snr -- signal to noise ratio within each level
+
+        group_sizes -- use equal sized groups or not; if not the snr is not meaningful any more..
     """
 
 
@@ -61,7 +82,13 @@ def sample_hier_block_model(groups_per_level = np.array([2,4]), nnodes = 1000, a
     nr_groups_til_level = np.cumprod(groups_per_level)
     nr_groups_total = nr_groups_til_level[-1]
 
-    nc = nnodes / nr_groups_total*np.ones(nr_groups_total)
+    if groups == 'same':
+        nc = nnodes / nr_groups_total*np.ones(nr_groups_total)
+    elif group_sizes == 'mixed':
+        nc = nnodes / nr_groups_total*np.ones(nr_groups_total)
+        min_size = nc[0] /4
+        nc = nc + np.random.randint(-min_size,min_size,nc.shape)
+
     num_cluster = 1
     Omega = np.array([[1]])
     for level_ in xrange(nr_levels):

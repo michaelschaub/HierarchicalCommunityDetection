@@ -17,24 +17,23 @@ np.set_printoptions(precision=4,linewidth=200)
 # %pylab
 # import experiments_michael
 
-def leto_experiment():
-    # mean degree and number of nodes etc.
-    n=1000
-    n_levels = 1
-    n_groups = 4
-    ratio = 0.4
+def loop_over_hierarchical_clustering(n_levels = np.array([2, 2, 2]), n= 2**14):
 
-    snr = 2
+    SNR_max = 10
+    SNR_min = 0.5
+    groups_per_level = n_levels
+    av_degree = 15
+    nsamples = 10
+    for i in np.arange(nsamples):
+        for SNR in np.arange(SNR_min,SNR_max,0.25):
 
-    # create GHRG object with specified parameters and create a sample network from it
-    D_gen=create2paramGHRG(n,snr,ratio,n_levels,n_groups)
-    G= D_gen.generateNetworkExactProb()
-    A= D_gen.to_scipy_sparse_matrix(G)
+            print "SNR =", SNR, "\n"
 
-    D_inferred = inference.split_network_spectral_partition(A,mode='Bethe',num_groups=n_groups)
-    Gnew= D_inferred.generateNetworkExactProb()
+            # sample hier block model
+            A, pvecs_true = sample_networks.sample_hier_block_model(groups_per_level, av_deg = av_degree, nnodes=n, snr=SNR)
 
-    return snr, D_inferred, D_gen
+            pvecs_inferred = spectral.hier_spectral_partition(A)
+            ol_score = metrics.calculate_level_comparison_matrix(pvecs_inferred,pvecs_true)
 
 def test_spectral_algorithms_hier_agg(n_levels=4,groups_per_level=2):
     random.seed(12345)
@@ -120,9 +119,9 @@ Experiment: Test Spectral inference algorithm on hierarchical test graph
 Create a sequence of test graphs (realizations of a specified hier. random model) and try
 to infer the true partition using spectral methods
 """
-def test_spectral_algorithms_hier(n_levels=3,groups_per_level=4):
+def test_spectral_algorithms_hier():
     # mean degree number of nodes etc.
-    SNR = 3
+    SNR = 10
     n=2**14
 
     # sample hier block model

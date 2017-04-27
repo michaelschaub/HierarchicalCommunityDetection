@@ -17,7 +17,8 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
     p0 = spectral_partition(A,mode=first_pass,num_groups=-1)
 
     # try to refine this partition as much as possible
-    pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=method_zoom)
+    # pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=method_zoom)
+    pvec_zoom = p0
     # print "ZOOM RESULTS:"
     # print pvec_zoom
     # print "\n\n"
@@ -473,7 +474,7 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
-def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
+def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
 
     max_k = Omega.shape[0]
     #TODO: we might want to adjust this later on
@@ -533,18 +534,26 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False):
         else:
             error('something went wrong. Please specify valid mode')
 
+        # normalize column norm to 1 of the partition indicator matrices
         H = preprocessing.normalize(H,axis=0,norm='l2')
         proj1 = project_orthogonal_to(H,V)
         proj2 = project_orthogonal_to(V,H)
-        norm1 = scipy.linalg.norm(proj1)
-        norm2 = scipy.linalg.norm(proj2)
+
+        if norm == 'F':
+            norm1 = scipy.linalg.norm(proj1)
+            norm2 = scipy.linalg.norm(proj2)
+            error = 0.5*(norm1+norm2)/np.sqrt(k)
+        elif norm == '2':
+            norm1 = scipy.linalg.norm(proj1,2)
+            norm2 = scipy.linalg.norm(proj2,2)
+            error = .5*(norm1+norm2)
+
         print "\n\nNorms"
         print norm1, norm2
-        error = 0.5*(norm1+norm2)
         print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
         print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
         # Note that this should always be fulfilled at k=1
-        if thres > error / np.sqrt(max_k):
+        if error  < thres :#np.sqrt(k / max_k):
             print "Agglomerated into " + str(k) + " groups \n\n"
             return k, partition_vec, H, error
 
