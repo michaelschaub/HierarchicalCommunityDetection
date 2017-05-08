@@ -82,7 +82,7 @@ def sample_hier_block_model(groups_per_level = np.array([2,4]), nnodes = 1000, a
     nr_groups_til_level = np.cumprod(groups_per_level)
     nr_groups_total = nr_groups_til_level[-1]
 
-    if groups == 'same':
+    if group_sizes == 'same':
         nc = nnodes / nr_groups_total*np.ones(nr_groups_total)
     elif group_sizes == 'mixed':
         nc = nnodes / nr_groups_total*np.ones(nr_groups_total)

@@ -557,24 +557,12 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
             print "Agglomerated into " + str(k) + " groups \n\n"
             return k, partition_vec, H, error
 
-    #TEST if there are indications for final/global agglomeration
-    # equitable condition
-    # actually this last part might be unnecessary..
-    AH = Omega.sum(axis=1) / np.sqrt(max_k)
-    HHpAH = np.ones_like(AH)*AH.mean()
-    error = scipy.linalg.norm(AH - HHpAH)
-    if thres > error/np.sqrt(max_k):
-        partition_vec = np.zeros((1,max_k))
-        H = create_partition_matrix_from_vector(partition_vec)
-        k = 1
-        print "Final agglomeration: yes \n"
-        return 1, partition_vec, H, error
-    else:
-        partition_vec = None
-        H = -1
-        k = 0
-        print "Final agglomeration: no \n"
-        return k , partition_vec, H, error
+    partition_vec = None
+    H = -1
+    k = 0
+    error = -1
+    print "Final agglomeration -- no \n"
+    return k , partition_vec, H, error
 
 
 

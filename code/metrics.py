@@ -64,7 +64,7 @@ def overlap_score(partition, true_partition):
 
     # TODO: this might not be necessary!? See below
     if num_groups2 != num_groups:
-        print "partitions with different number of groups are prepared! Please prepare the results accordingly"
+        print "partitions with different number of groups"
 
     if num_groups < num_groups2:
         num_groups = num_groups2

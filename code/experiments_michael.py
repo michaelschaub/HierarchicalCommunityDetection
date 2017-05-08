@@ -8,6 +8,7 @@ from scipy import linalg
 from matplotlib import pyplot as plt
 import random
 import sample_networks
+import pickle
 
 np.set_printoptions(precision=4,linewidth=200)
 
@@ -21,11 +22,14 @@ def loop_over_hierarchical_clustering(n_levels = np.array([2, 2, 2]), n= 2**14):
 
     SNR_max = 10
     SNR_min = 0.5
+    SNR_range = np.arange(SNR_min,SNR_max,0.25)
     groups_per_level = n_levels
     av_degree = 15
     nsamples = 10
+    precision = np.zeros((nsamples,SNR_range.shape[0]))
+    recall = np.zeros((nsamples,SNR_range.shape[0]))
     for i in np.arange(nsamples):
-        for SNR in np.arange(SNR_min,SNR_max,0.25):
+         for j, SNR in enumerate(SNR_range):
 
             print "SNR =", SNR, "\n"
 
@@ -33,7 +37,41 @@ def loop_over_hierarchical_clustering(n_levels = np.array([2, 2, 2]), n= 2**14):
             A, pvecs_true = sample_networks.sample_hier_block_model(groups_per_level, av_deg = av_degree, nnodes=n, snr=SNR)
 
             pvecs_inferred = spectral.hier_spectral_partition(A)
-            ol_score = metrics.calculate_level_comparison_matrix(pvecs_inferred,pvecs_true)
+            ol_matrix = metrics.calculate_level_comparison_matrix(pvecs_inferred,pvecs_true)
+
+            p,r=metrics.calculate_precision_recall(ol_matrix)
+            precision[i,j] = p
+            recall[i,j] = r
+
+    plt.figure()
+    plt.plot(SNR_range,precision.mean(axis=0),'b-.')
+    plt.plot(SNR_range,recall.mean(axis=0),'r--')
+
+
+def test_pr1():
+    reps=20
+    n=800
+
+    true_pvecs=np.zeros((2,n))
+    true_pvecs[0,n/2:]=1
+    for i in xrange(8):
+        true_pvecs[1,(i*100):(i+1)*(100)]=i
+
+    precision=np.zeros(40)
+    recall=np.zeros(40)
+    for rep in xrange(reps):
+        for li,l in enumerate(xrange(0,n,20)):
+            print "l",l
+            pvecs=true_pvecs.copy()
+            inds=sample(xrange(n),l)
+            _,new_values=np.random.multinomial(1,np.ones(8)/8,size=l).nonzero()
+            pvecs[1,inds]=new_values
+            pvecs[0,inds]=np.int32(new_values>3)
+
+            sm=metrics.calculate_level_comparison_matrix(pvecs,true_pvecs)
+            precision[li]+=p/reps
+            recall[li]+=r/reps
+
 
 def test_spectral_algorithms_hier_agg(n_levels=4,groups_per_level=2):
     random.seed(12345)
