@@ -38,20 +38,25 @@ def detectChanges_flat(Gs,w,mode='Bethe'):
 
 
 def test_posteriorBayesFactor(As,D,w,n_samples=1000):
-    partition = D.get_highest_partition()
+    partition = D.get_highest_partition()   #NEED TO UPDATE: this only uses highest partition (while we assume number of groups is two and it is known)
     test_statistic = -np.inf
     best_change_point=None
     
-    obs_edge_counts = zip(*[spectral.compute_number_links_between_groups(A,partition) for A in As])
-    #~ print obs_edge_counts
+    obs_edge_counts = zip(*[spectral.compute_number_links_between_groups(A,partition) for A in As]) #NEED to adjust diagonal blocks? I think Ers are correct...
+    # here we use Er as edge counts and Nr for non-edge counts
     obs_Ers=np.array(obs_edge_counts[0])
     obs_Nrs=np.array(obs_edge_counts[1])-obs_Ers
     
     for cp in xrange(1,w):
         #~ before_ec= zip(*obs_edge_counts[:cp])
         #~ after_ec= zip(*obs_edge_counts[cp:])
+        a=np.array([1.+sum(obs_Ers[:cp])])
+        b=np.array([1.+sum(obs_Nrs[:cp])])
         ts = sum(model_selection.betabinlik(Er,Nr,a=1.+sum(obs_Ers[:cp]),b=1.+sum(obs_Nrs[:cp])).sum() for (Er,Nr) in izip(obs_Ers[:cp],obs_Nrs[:cp]))
+        print a.shape, b.shape, obs_Ers[:cp].shape,obs_Nrs[:cp].shape
+        print a,b,ts, model_selection.betabinlik(obs_Ers[:cp],obs_Nrs[:cp],a,b) #,a=1.+sum(obs_Ers[:cp]),b=1.+sum(obs_Nrs[:cp])).sum()
         ts += sum(model_selection.betabinlik(Er,Nr,a=1.+sum(obs_Ers[cp:]),b=1.+sum(obs_Nrs[cp:])).sum() for (Er,Nr) in izip(obs_Ers[cp:],obs_Nrs[cp:]))
+        #~ print adad
         #~ print cp,ts
         if ts>test_statistic:
             best_change_point=cp
@@ -65,25 +70,20 @@ def test_posteriorBayesFactor(As,D,w,n_samples=1000):
     null_dist=np.empty(n_samples)
     
     #generate null distribution
+    #TODO - loop over w (instead of n_samples)
     for i in xrange(n_samples):
-        #~ print i
-        #~ print len(D.generateNetwork().edges())
-        #~ edge_counts=zip(*[spectral.compute_number_links_between_groups(nx.to_scipy_sparse_matrix(D.generateNetwork()),partition) for j in xrange(w)])
-        edge_counts=zip(*[spectral.compute_number_links_between_groups(nx.to_scipy_sparse_matrix(D.generateNetworkExactProb()),partition) for j in xrange(w)])
         
-        #~ print edge_counts, asds
-        #~ before_ec= zip(*edge_counts[:best_change_point])
-        #~ after_ec= zip(*edge_counts[best_change_point:])
+        #~ edge_counts=zip(*[spectral.compute_number_links_between_groups(nx.to_scipy_sparse_matrix(D.generateNetworkExactProb()),partition) for j in xrange(w)])
+        edge_counts=zip(*[spectral.compute_number_links_between_groups(nx.to_scipy_sparse_matrix(D.generateNetworkBeta()),partition) for j in xrange(w)])
+        
         Ers=np.array(edge_counts[0])
         Nrs=np.array(edge_counts[1])-Ers
         
         ts = sum(model_selection.betabinlik(Er,Nr,a=1.+sum(Ers[:best_change_point]),b=1.+sum(Nrs[:best_change_point])).sum() for (Er,Nr) in izip(Ers[:best_change_point],Nrs[:best_change_point]))
         ts += sum(model_selection.betabinlik(Er,Nr,a=1.+sum(Ers[best_change_point:]),b=1.+sum(Nrs[best_change_point:])).sum() for (Er,Nr) in izip(Ers[best_change_point:],Nrs[best_change_point:]))
-        #~ print ts
+        
         null_dist[i] = ts - sum(model_selection.betabinlik(Er,Nr,a=1.+sum(Ers),b=1.+sum(Nrs)).sum() for (Er,Nr) in izip(Ers,Nrs))
-        #~ print  null_dist
-        #~ print  i,ts- sum(model_selection.betabinlik(Er,Nr,a=1.+sum(Ers),b=1.+sum(Nrs)).sum() for (Er,Nr) in izip(Ers,Nrs))
-    
+        
     #~ print null_dist
     p_value = 1-(test_statistic>null_dist).sum()/n_samples
     

@@ -248,6 +248,43 @@ class GHRG(nx.DiGraph):
         #remove self loops
         G.remove_edges_from(G.selfloop_edges())
         return G
+    
+    def generateNetwork_parameters(self,directed=False):
+        """
+        Return a list of Ers and Nrs (edges and possible edges) that represent the GHRG
+        """
+        if directed:
+            error('directed case not defined yet')
+        
+        Ers=[]
+        Nrs=[]
+
+        #cycle through nodes and generate edges
+        for v in self.nodes_iter():
+            
+            children=self.node[v]['children']
+            Nr=self.node[v]['Nr']
+            Er=self.node[v]['Er']
+            if not directed:
+                Nr = np.triu(Nr)
+                Er = np.triu(Er)
+
+            for ci,cj in izip(*Nr.nonzero()):
+                try:
+                    childi=self.node[children[ci]]
+                    childj=self.node[children[cj]]
+                except IndexError:      # if it is a leaf node
+                    childi=self.node[v]
+                    childj=self.node[v]
+                
+                Ers.append(Er[ci,cj])
+                if ci == cj:
+                    #~ Nrs.append(0.5*childi['n']*(childi['n']-1))
+                    Nrs.append(Nr[ci,cj])       ##REMOVE this line after issue with compute_number_links_between_groups
+                else:
+                    Nrs.append(Nr[ci,cj])
+                
+        return Ers,Nrs
 
     def print_nodes(self,keys=['Er','Nr']):
         for node in self.nodes_iter():
