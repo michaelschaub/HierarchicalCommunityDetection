@@ -15,6 +15,13 @@ def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
 
             Output: networkx dendrogram
     """
+    # TODO 1: remove helper functions from here
+    # TODO 2: make sure correct dendrogram is created with all fields
+    # TODO 3: document GHRG data structure
+    # TODO 4: implement undirected version of counting
+    # TODO 5: demo function for leto
+
+
 
     nr_nodes = A.shape[0]
     partition = spectral.spectral_partition(A, mode=mode, num_groups=num_groups)
@@ -26,7 +33,7 @@ def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
     # create root node and assign properties
     Dendro.root_node = 0
     # TODO: add multipliers here?!?
-    Emat, Nmat = compute_number_links_between_groups(A,partition)
+    Emat, Nmat = spectral.compute_number_links_between_groups(A,partition)
 
     Dendro.add_node(Dendro.root_node, Er=Emat, Nr=Nmat)
     Dendro.node[Dendro.root_node]['nnodes'] = Dendro.network_nodes
@@ -44,6 +51,7 @@ def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
 
     return Dendro
 
+#TODO: this function should be adjusted/updated -- May 9
 def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, max_depth=3):
     """ Recursively split graph into pieces by employing a spectral clustering strategy.
 
@@ -67,7 +75,7 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
     Dendro.root_node = 0
 
     # create root node and assign properties
-    Emat, Nmat = compute_number_links_between_groups(A,current_partition)
+    Emat, Nmat = spectral.compute_number_links_between_groups(A,current_partition)
     Dendro.add_node(Dendro.root_node, Er=Emat, Nr=Nmat)
     # names of nodes corresponding to node in Dendrogram
     Dendro.node[Dendro.root_node]['nnodes'] = Dendro.network_nodes
@@ -107,7 +115,7 @@ def split_network_by_recursive_spectral_partition(A, mode='Lap', num_groups=2, m
             # cluster subgraph recursively
             partition = spectral.spectral_partition(Asub, mode=mode, num_groups=num_groups)
 
-            Emat, Nmat = compute_number_links_between_groups(Asub,partition)
+            Emat, Nmat = spectral.compute_number_links_between_groups(Asub,partition)
             Dendro.node[node]['Er'] = Emat
             Dendro.node[node]['Nr'] = Nmat
             nr_groups = np.unique(partition).size
@@ -143,49 +151,7 @@ def infer_spectral_blockmodel(A, mode='Lap', max_num_groups=None):
     for k in xrange(1,max_num_groups):
         partition = spectral.spectral_partition(A, mode=mode, num_groups=k)
 
-        E_rs, N_rs = compute_number_links_between_groups(A,partition)
+        E_rs, N_rs = spectral.compute_number_links_between_groups(A,partition)
 
         looxv[k-1] = sum(model_selection.looxv(Er,Nr) for Er, Nr in izip(E_rs.flatten(),N_rs.flatten()))
     return looxv
-
-
-#######################################################
-# HELPER FUNCTIONS
-#######################################################
-def compute_number_links_between_groups(A,partition_vec):
-    """
-    Compute the number of possible and actual links between the groups indicated in the
-    partition vector.
-    """
-
-    pmatrix = create_partition_matrix_from_vector(partition_vec)
-    # number of columns is number of groups
-    nr_groups = pmatrix.shape[1]
-
-    if not scipy.sparse.issparse(A):
-        A = scipy.mat(A)
-
-    # all inputs are matrices here -- calculation works accordingly and transforms to
-    # array only afterwards
-    # each block counts the number of half links / directed links
-    links_between_groups = pmatrix.T * A * pmatrix
-    links_between_groups = links_between_groups.A
-
-    # convert to array type first, before performing outer product
-    nodes_per_group = pmatrix.sum(0).A
-    possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
-
-
-    return links_between_groups, possible_links_between_groups
-
-def create_partition_matrix_from_vector(partition_vec):
-    """
-    Create a partition indicator matrix from a given vector; -1 entries in partition vector will
-    be ignored and can be used to denote unasigned nodes.
-    """
-    nr_nodes = partition_vec.size
-    k=len(np.unique(partition_vec))
-
-    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
-    return partition_matrix
-
