@@ -15,8 +15,6 @@ def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
 
             Output: networkx dendrogram
     """
-    # TODO 5: demo function for leto
-
     # The function consists of mainly two parts
     # A) call spectral partition algorithm
     # B) assemble the output into the corresponding DHRG data structure
@@ -36,25 +34,24 @@ def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
     Dendro.directed = False
     Dendro.root_node = 0
 
-    Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=True)
-    # print "Emat, Nmat computed directed"
-    # print Emat,"\n", Nmat
-
+    # compute link matrices
     Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=False)
     # print "Emat, Nmat computed undirected"
     # print Emat, "\n", Nmat,"\n\n\n"
-
     Er_wod = Emat - np.diag(np.diag(Emat))
     Nr_wod = Nmat - np.diag(np.diag(Nmat))
 
+    # add statistic to root
     Dendro.add_node(Dendro.root_node, Er=Er_wod, Nr=Nr_wod)
     Dendro.node[Dendro.root_node]['nnodes'] = Dendro.network_nodes
     Dendro.node[Dendro.root_node]['n'] = nr_nodes
 
+    # add children
     nr_groups = partition.max()+1
     nodes_next_level = Dendro.add_children(Dendro.root_node, nr_groups)
     Dendro.node[Dendro.root_node]['children'] = nodes_next_level
 
+    # initialize children
     for i, n in enumerate(nodes_next_level):
         subpart = partition == i
         Dendro.node[n]['nnodes'] = subpart.nonzero()[0]
