@@ -8,34 +8,79 @@ from itertools import izip
 """
 GHRG base class is a networkx DiGraph that stores a dendrogram of the hierarchical model.
 The dendrogram is a directed tree with edges pointing outward from the root towards the leafs.
+
+In the following description the Dendrogram graph is denoted by D.
+The hierarchical graph it encodes is denoted by G.
+
+
+The dengrogram D has the following properties
+
+D.network_nodes -- list of all nodes in G that are desribed by the dendrogram
+D.root_node     -- the root node of the dendrogram
+D.directed      -- is the underlying graph G directed? (True / False)
+D.self_loops    -- self-loops allowed in G? (True / False)
+
+
+Each node in the GHRG dendrogram graph D has the following fields.
+
+'children' -- out-neighbours of the nodes in D (corresponding to sub-groupings in G)
+'n'        -- the number of nodes in G that dendrogram node corresponds to
+'nnodes'   -- the Ids of the nodes in G that the dendrogram node corresponds to.
+              (the total number of Ids should correspond to 'n')
+
+'Nr'       -- len(children) x len(children) sized matrix encoding the maximal possible
+              number of links between the nodes in G corresponding to the children
+'Er'       -- len(children) x len(children) sized matrix encoding the number of links between
+              the nodes in G corresponding to the children
+
+
+REMARKS
+Note that depending on whether D.directed is true or not the matrices Nr and Er will be upper
+triangular and include #undirected links or #directed links
+
+If the node is not a leaf node in D, then the diagonal entry in Nr / Er should be 0 by convention; since the precise details of the connectivity pattern are to be read out at a lower level
+
 """
 class GHRG(nx.DiGraph):
-
-    """
-    Function to update the N_r and E_r parameters using a graph G
-    """
-    def updateParams(self, G):
-        pass
 
     """
     Function to update the N_r and E_r parameters using a fixed probability matrix, omega
     """
     def setParameters(self, omega):
+
+        # print "OMEGA"
+        # print omega
         for node in self.nodes_iter():
             level=len(nx.shortest_path(self,self.root_node,node))-1
             #create ordered list of child nodes
             self.node[node]['children']=self.successors(node)
             self.node[node]['children'].sort()
-            for ci,childi in enumerate(self.node[node]['children']):
-                for cj,childj in enumerate(self.node[node]['children']):
-                    if not (ci==cj): #  or (childi in self.leaf_nodes):
-                        #~ print ci,cj,self.node[node]['Nr'], node
-                        self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
-                        self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
-            if node in self.leaf_nodes:
-                #~ print ci,cj
-                self.node[node]['Nr'] = np.array([[self.node[node]['n']*self.node[node]['n']]])
-                self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
+
+            if self.directed:
+
+                for ci,childi in enumerate(self.node[node]['children']):
+                    for cj,childj in enumerate(self.node[node]['children']):
+                        if ci != cj:
+                            self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
+                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
+
+                if node in self.leaf_nodes:
+                    #~ print ci,cj
+                    self.node[node]['Nr'] = np.array([[self.node[node]['n']*self.node[node]['n']]])
+                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
+
+            else:
+
+                for ci,childi in enumerate(self.node[node]['children']):
+                    for cj,childj in enumerate(self.node[node]['children'][ci:],ci):
+                        if ci != cj:
+                            self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
+                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
+
+                if node in self.leaf_nodes:
+                    #~ print ci,cj
+                    self.node[node]['Nr'] = (np.array([[self.node[node]['n']*self.node[node]['n']]])- self.node[node]['n'])/2
+                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
 
 
 
@@ -159,65 +204,37 @@ class GHRG(nx.DiGraph):
     Function to generate networks from the model
     """
     def generateNetworkBeta(self,mode='Undirected'):
-        return self.generateNetwork(edgeProb='beta',directed=(mode=='Directed'))
-        #~ """
-        #~ Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
-        #~ probability of connection with other blocks by working up to the root of the tree.
-        #~ """
-        #~ G=nx.Graph()
-
-        #~ #cycle through nodes and generate edges
-        #~ for v in self.nodes_iter():
-            #~ children=self.node[v]['children']
-            #~ Nr=self.node[v]['Nr']
-            #~ for ci,cj in izip(*Nr.nonzero()):
-                #~ try:
-                    #~ childi=self.node[children[ci]]
-                    #~ childj=self.node[children[cj]]
-                #~ except IndexError:      # if it is a leaf node
-                    #~ childi=self.node[v]
-                    #~ childj=self.node[v]
-                #~ alpha=np.ones(Nr[ci,cj])+self.node[v]['Er'][ci,cj]
-                #~ beta=np.ones(Nr[ci,cj])+(Nr[ci,cj]-self.node[v]['Er'][ci,cj])
-                #~ try:
-                    #~ p = np.random.beta(alpha,beta)
-                #~ except ValueError:
-                    #~ print alpha, beta, fail
-                #~ edges= (np.random.rand(int(Nr[ci,cj])) < p).reshape((childi['n'],childj['n'])).nonzero()
-                #~ G.add_edges_from(zip(childi['nnodes'][edges[0]],childj['nnodes'][edges[1]]))
-
-        #~ #remove self loops
-        #~ G.remove_edges_from(G.selfloop_edges())
-        #~ return G
+        return self.generateNetwork(edgeProb='beta')
 
     """
     Function to generate networks from the model
     """
     def generateNetworkExactProb(self,mode='Undirected'):
-        return self.generateNetwork(edgeProb='exact',directed=(mode=='Directed'))
-        
-    def generateNetwork(self,edgeProb='beta',directed=False):
+        return self.generateNetwork(edgeProb='exact')
+
+    def generateNetwork(self,edgeProb='beta'):
         """
         Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
         probability of connection with other blocks by working up to the root of the tree.
         """
-        if directed:
+        if self.directed:
             error('directed case not defined yet')
         else:
+            # create new graph and make sure that all nodes are added
+            # even though the graph might be disconnected
             G=nx.Graph()
-            # make sure that all nodes are added even though the graph might be disconnected
             G.add_nodes_from(np.arange(self.node[0]['n']))
-            
 
-        #cycle through nodes and generate edges
+
+        # cycle through nodes and generate edges
         for v in self.nodes_iter():
-            
+
             children=self.node[v]['children']
             Nr=self.node[v]['Nr']
             Er=self.node[v]['Er']
-            if not directed:
-                Nr = np.triu(Nr)
-                Er = np.triu(Er)
+            # NOTE: if Nr / Er matrices contain non-zero diagonals, then we create too many edges due to the leaf nodes.
+            # possible alternative is to ignore leaf nodes here in the sampling
+            # this might be the cleaner solution
 
             for ci,cj in izip(*Nr.nonzero()):
                 try:
@@ -236,32 +253,37 @@ class GHRG(nx.DiGraph):
                     else :
                         error('edge probabilities undefined')
                     # print "Probability"
-                    # print p
+                    # print ci, cj, p
                 except ValueError:
                     print "Something went wrong when sampling from the model"
-                edges = (np.random.rand(int(Nr[ci,cj])) < p).reshape((childi['n'],childj['n']))
-                if ci == cj:
+
+                # create edges to insert
+                edges = (np.random.rand(childi['n']*childj['n'])< p).reshape((childi['n'],childj['n']))
+                if ci == cj and not self.directed:
                     edges = np.triu(edges)
                 edges = edges.nonzero()
+
                 G.add_edges_from(zip(childi['nnodes'][edges[0]],childj['nnodes'][edges[1]]))
 
         #remove self loops
-        G.remove_edges_from(G.selfloop_edges())
+        if not self.self_loops:
+            G.remove_edges_from(G.selfloop_edges())
+
         return G
-    
+
     def generateNetwork_parameters(self,directed=False):
         """
         Return a list of Ers and Nrs (edges and possible edges) that represent the GHRG
         """
         if directed:
             error('directed case not defined yet')
-        
+
         Ers=[]
         Nrs=[]
 
         #cycle through nodes and generate edges
         for v in self.nodes_iter():
-            
+
             children=self.node[v]['children']
             Nr=self.node[v]['Nr']
             Er=self.node[v]['Er']
@@ -276,14 +298,14 @@ class GHRG(nx.DiGraph):
                 except IndexError:      # if it is a leaf node
                     childi=self.node[v]
                     childj=self.node[v]
-                
+
                 Ers.append(Er[ci,cj])
                 if ci == cj:
                     #~ Nrs.append(0.5*childi['n']*(childi['n']-1))
                     Nrs.append(Nr[ci,cj])       ##REMOVE this line after issue with compute_number_links_between_groups
                 else:
                     Nrs.append(Nr[ci,cj])
-                
+
         return Ers,Nrs
 
     def print_nodes(self,keys=['Er','Nr']):
@@ -307,7 +329,7 @@ class GHRG(nx.DiGraph):
             if len(self.successors(node))==0:
                 children=self.node[node]['nnodes']
                 print node, len(children), children
-    
+
     def get_highest_partition(self):
         partition=np.zeros(self.node[self.root_node]['n'])
         # print len(partition)
@@ -318,7 +340,7 @@ class GHRG(nx.DiGraph):
             partition[children]=pi
             pi+=1
         return partition
-    
+
     def get_lowest_partition(self):
         partition=np.zeros(self.node[self.root_node]['n'])
         # print len(partition)
@@ -375,6 +397,7 @@ class GHRG(nx.DiGraph):
     def detectability_report(self):
         pass
 
+# TODO this function should be phased out
 def create_partition_matrix_from_vector(partition_vec):
     """
     Create a partition indicator matrix from a given vector; -1 entries in partition vector will

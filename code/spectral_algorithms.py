@@ -677,7 +677,7 @@ def test_sparse_and_transform(A):
     return A
 
 
-def compute_number_links_between_groups(A,partition_vec):
+def compute_number_links_between_groups(A,partition_vec,directed=True):
     """
     Compute the number of possible and actual links between the groups indicated in the
     partition vector.
@@ -696,9 +696,18 @@ def compute_number_links_between_groups(A,partition_vec):
     links_between_groups = pmatrix.T * A * pmatrix
     links_between_groups = links_between_groups.A
 
+    if not directed:
+        links_between_groups = links_between_groups - np.diag(np.diag(links_between_groups))/2.0
+        links_between_groups = np.triu(links_between_groups)
+
     # convert to array type first, before performing outer product
     nodes_per_group = pmatrix.sum(0).A
     possible_links_between_groups = np.outer(nodes_per_group,nodes_per_group)
+
+    if not directed:
+        possible_links_between_groups = possible_links_between_groups - np.diag(nodes_per_group.flatten())
+        possible_links_between_groups = possible_links_between_groups - np.diag(np.diag(possible_links_between_groups))/2.0
+        possible_links_between_groups = np.triu(possible_links_between_groups)
 
 
     return links_between_groups, possible_links_between_groups

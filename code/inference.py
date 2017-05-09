@@ -15,27 +15,39 @@ def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
 
             Output: networkx dendrogram
     """
-    # TODO 1: remove helper functions from here
-    # TODO 2: make sure correct dendrogram is created with all fields
-    # TODO 3: document GHRG data structure
-    # TODO 4: implement undirected version of counting
     # TODO 5: demo function for leto
 
+    # The function consists of mainly two parts
+    # A) call spectral partition algorithm
+    # B) assemble the output into the corresponding DHRG data structure
 
-
+    ##########
+    # PART (A)
     nr_nodes = A.shape[0]
     partition = spectral.spectral_partition(A, mode=mode, num_groups=num_groups)
 
+
+    ##########
+    # PART (B)
     # initialise networkx output dendrogram, and store some things as properties of the graph
+    # create root node and assign properties
     Dendro = GHRG()
     Dendro.network_nodes = np.arange(nr_nodes)
-
-    # create root node and assign properties
+    Dendro.directed = False
     Dendro.root_node = 0
-    # TODO: add multipliers here?!?
-    Emat, Nmat = spectral.compute_number_links_between_groups(A,partition)
 
-    Dendro.add_node(Dendro.root_node, Er=Emat, Nr=Nmat)
+    Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=True)
+    # print "Emat, Nmat computed directed"
+    # print Emat,"\n", Nmat
+
+    Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=False)
+    # print "Emat, Nmat computed undirected"
+    # print Emat, "\n", Nmat,"\n\n\n"
+
+    Er_wod = Emat - np.diag(np.diag(Emat))
+    Nr_wod = Nmat - np.diag(np.diag(Nmat))
+
+    Dendro.add_node(Dendro.root_node, Er=Er_wod, Nr=Nr_wod)
     Dendro.node[Dendro.root_node]['nnodes'] = Dendro.network_nodes
     Dendro.node[Dendro.root_node]['n'] = nr_nodes
 
@@ -48,6 +60,8 @@ def split_network_spectral_partition(A, mode='Bethe', num_groups=-1):
         Dendro.node[n]['nnodes'] = subpart.nonzero()[0]
         Dendro.node[n]['n'] = len(subpart.nonzero()[0])
         Dendro.node[n]['children'] = []
+        Dendro.node[n]['Er'] = Emat[i,i]
+        Dendro.node[n]['Nr'] = Nmat[i,i]
 
     return Dendro
 

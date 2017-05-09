@@ -47,32 +47,6 @@ def loop_over_hierarchical_clustering(n_levels = np.array([2, 2, 2]), n= 2**14):
     plt.plot(SNR_range,precision.mean(axis=0),'b-.')
     plt.plot(SNR_range,recall.mean(axis=0),'r--')
 
-
-def test_pr1():
-    reps=20
-    n=800
-
-    true_pvecs=np.zeros((2,n))
-    true_pvecs[0,n/2:]=1
-    for i in xrange(8):
-        true_pvecs[1,(i*100):(i+1)*(100)]=i
-
-    precision=np.zeros(40)
-    recall=np.zeros(40)
-    for rep in xrange(reps):
-        for li,l in enumerate(xrange(0,n,20)):
-            print "l",l
-            pvecs=true_pvecs.copy()
-            inds=sample(xrange(n),l)
-            _,new_values=np.random.multinomial(1,np.ones(8)/8,size=l).nonzero()
-            pvecs[1,inds]=new_values
-            pvecs[0,inds]=np.int32(new_values>3)
-
-            sm=metrics.calculate_level_comparison_matrix(pvecs,true_pvecs)
-            precision[li]+=p/reps
-            recall[li]+=r/reps
-
-
 def test_spectral_algorithms_hier_agg(n_levels=4,groups_per_level=2):
     random.seed(12345)
     # mean degree number of nodes etc.
@@ -306,7 +280,6 @@ def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
         # cin, cout = calculateDegrees(cm,ratio,groups_per_level)
         cin, cout = sample_networks.calculateDegreesFromSNR(snr,ratio,groups_per_level)
         print "Hierarchy Level: ", level, '| KS Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n_this_level,cout/n_this_level
-
         # Omega is assigned on a block level, i.e. for each level we have one omega array
         # this assumes a perfect hierarchy with equal depth everywhere
         omega[level] = np.ones((groups_per_level,groups_per_level))*cout/n_this_level + np.eye(groups_per_level)*(cin/n_this_level-cout/n_this_level)
@@ -324,6 +297,8 @@ def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
     # order is important so that we can efficiently create views at each
     # internal dendrogram node
     D.network_nodes = np.arange(n)
+    D.directed = False
+    D.self_loops = False
 
     # create root node and store attribues of graph in it
     # this corresponds to an unclustered graph
@@ -355,5 +330,28 @@ def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
     D.setLeafNodeOrder()
     D.setParameters(omega)
 
-
     return D
+
+
+def run_test_ErNr_for_Leto(n_groups=2):
+    # mean degree and number of nodes etc.
+    n=1000
+    n_levels = 1
+    K=n_groups**n_levels
+    ratio = 0.5
+    snr = 8
+
+    D_gen=create2paramGHRG(n,snr,ratio,n_levels,n_groups)
+    partition_true = D_gen.get_lowest_partition()
+    G= D_gen.generateNetworkExactProb()
+    A= D_gen.to_scipy_sparse_matrix(G)
+
+    D_inferred = inference.split_network_spectral_partition(A)
+
+    for ii in range(len(D_gen.nodes())):
+        print "GENERATED"
+        print D_gen.node[ii]
+        print "INFERRED"
+        print D_inferred.node[ii]
+
+    return D_gen, D_inferred, A, partition_true
