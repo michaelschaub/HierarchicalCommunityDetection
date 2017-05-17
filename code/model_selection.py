@@ -22,8 +22,9 @@ def looxv(Er,Nr,a=1.,b=1.):
 
 def betabinlik(Er,Nr,a=1.,b=1.):
     
-    lik= - betaln(a, b) 
-    lik+= betaln(Er+a, Nr-Er+b)
+    
+    lik= betaln(Er+a, Nr-Er+b)
+    lik+= - betaln(a, b) 
     #~ lik+= np.log(binom(Nr,Er))
     
     return lik

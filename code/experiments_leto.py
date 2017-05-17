@@ -12,6 +12,7 @@ from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 plt.ion()
 import metrics
 from random import sample
+import sample_networks
 
 
 """
@@ -114,16 +115,34 @@ def test_pr2():
 """
 Test change point detection
 """
-def test_cp():
+def test_cp(snr_before = 1, snr_after = 1, n_groups=2):
+    
+    # mean degree and number of nodes etc.
+    n=1000
+    n_levels = 1
+    K=n_groups**n_levels
+    ratio_before = 0.5
+    ratio_after = 0.5
+    #~ snr_before = 1
+    #~ snr_after = 1
+    
+    #before change model
+    print "before change model"
+    D1=create2paramGHRG(n,snr_before,ratio_before,n_levels,n_groups)
+    #after change model
+    print "after change model"
+    D2=create2paramGHRG(n,snr_after,ratio_after,n_levels,n_groups)
+    
+    
     #sliding window
     w=4
     #degree
     cm=20
     #before change model
-    D1=create2paramGHRG(100,cm,0.5,1,2)
+    #~ D1=create2paramGHRG(100,cm,0.5,1,2)
     #~ D1=create2paramGHRG(100,cm,1,1,2)
     #after change model
-    D2=create2paramGHRG(100,cm,1,1,2)
+    #~ D2=create2paramGHRG(100,cm,1,1,2)
     
     #create sequence of graphs
     Gs=[D1.generateNetworkExactProb() for i in xrange(w+1)]
@@ -131,7 +150,7 @@ def test_cp():
     
     print [len(G.edges()) for G in Gs]
     
-    return cp.detectChanges_flat(Gs,w,mode='Lap')
+    return cp.detectChanges_flat(Gs,w)
     
     
 
@@ -394,37 +413,31 @@ def exp1(runs=10):
     # return bb_mean, tb_mean, tt_mean
 
 """
-Calculate in and out block degree parameters for a given mean degree and ratio
-parameters:
-    cm  : mean degree
-    ratio   : cout/cin
-    K   : number of groups
-    ncin    : number of cin blocks per row
-"""
-def calculateDegrees(cm,ratio,K,ncin=1.):
-    cin = (K*cm) / (ncin+(K-ncin)*ratio)
-    cout = cin * ratio
-    return cin,cout
-
-
-"""
 Function to create a test GHRG for simulations
 parameters:
     n   : number of nodes
-    p_in    : within community prob
-    p_out   : across community prob
     n_levels    : depth of GHRG
-    level_k     : number of groups at each level
+    groups_per_level     : number of groups at each level
 """
-def create2paramGHRG(n,cm,ratio,n_levels,level_k):
+def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
 
     #interaction probabilities
     omega={}
+    n_this_level = n
     for level in xrange(n_levels):
-        cin,cout=calculateDegrees(cm,ratio,level_k)
-        print level, 'Detectable:',cin-cout>2*np.sqrt(cm), cin/n,cout/n
-        omega[level] = np.ones((level_k,level_k))*cout/n + np.eye(level_k)*(cin/n-cout/n)
-        cm=cin
+        # cin, cout = calculateDegrees(cm,ratio,groups_per_level)
+        cin, cout = sample_networks.calculateDegreesFromSNR(snr,ratio,groups_per_level)
+        print "Hierarchy Level: ", level, '| KS Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n_this_level,cout/n_this_level
+        # Omega is assigned on a block level, i.e. for each level we have one omega array
+        # this assumes a perfect hierarchy with equal depth everywhere
+        omega[level] = np.ones((groups_per_level,groups_per_level))*cout/n_this_level + np.eye(groups_per_level)*(cin/n_this_level-cout/n_this_level)
+        if np.any(omega[level]>=1):
+            print "no probability > 1 not allowed"
+            raise ValueError("Something wrong")
+        n_this_level = n_this_level / float(groups_per_level)
+        if np.floor(n_this_level) != n_this_level:
+            print "Rounding number of nodes"
+
 
     D=GHRG()
 
@@ -432,41 +445,37 @@ def create2paramGHRG(n,cm,ratio,n_levels,level_k):
     # order is important so that we can efficiently create views at each
     # internal dendrogram node
     D.network_nodes = np.arange(n)
-    #~ D.add_nodes_from(D.network_nodes, leaf=True)
+    D.directed = False
+    D.self_loops = False
 
     # create root node and store attribues of graph in it
-    # TODO --- len(D) will evaluate to zero here, why write it like this?
-    D.root_node = len(D)
-    D.add_node(D.root_node, Er=np.zeros((level_k,level_k)), Nr=np.zeros((level_k,level_k)))
+    # this corresponds to an unclustered graph
+    D.root_node = 0
+    D.add_node(D.root_node, Er=np.zeros((groups_per_level,groups_per_level)), Nr=np.zeros((groups_per_level,groups_per_level)))
     D.node[D.root_node]['nnodes'] = D.network_nodes[:]
     D.node[D.root_node]['n'] = n
 
-    # add root's children
-    nodes_this_level = D.add_children(D.root_node, level_k)
-    #create local view of network node assignment
-    for ci,child in enumerate(nodes_this_level):
-        #~ print child, D.predecessors(child), D.node[D.predecessors(child)[0]]['nnodes'][ci*n/level_k:(ci+1)*n/level_k]
-        D.node[child]['nnodes'] = D.node[D.root_node]['nnodes'][ci*n/level_k:(ci+1)*n/level_k]
+    # split network into groups -- add children in dendrogram
+    nodes_this_level = D.add_children(D.root_node, groups_per_level)
+    for ci, child in enumerate(nodes_this_level):
+        D.node[child]['nnodes'] = D.node[D.root_node]['nnodes'][ci*n/groups_per_level:(ci+1)*n/groups_per_level]
         D.node[child]['n'] = len(D.node[child]['nnodes'])
 
-    #construct dendro breadth first
+    #construct dendrogram breadth first
     for nl in xrange(n_levels-1):
         nodes_last_level=list(nodes_this_level)
         nodes_this_level=[]
         for parent in nodes_last_level:
-            children=D.add_children(parent, level_k)
+            children=D.add_children(parent, groups_per_level)
             nodes_this_level.extend(children)
 
             #create local view of network node assignment
             level_n=len(D.node[parent]['nnodes'])
             for ci,child in enumerate(children):
-
-                #~ print child, D.predecessors(child), level_n, D.node[D.predecessors(child)[0]]['nnodes'][ci*level_n/level_k:(ci+1)*level_n/level_k]
-                D.node[child]['nnodes'] = D.node[D.predecessors(child)[0]]['nnodes'][ci*level_n/level_k:(ci+1)*level_n/level_k]
+                D.node[child]['nnodes'] = D.node[D.predecessors(child)[0]]['nnodes'][ci*level_n/groups_per_level:(ci+1)*level_n/groups_per_level]
                 D.node[child]['n'] = len(D.node[child]['nnodes'])
 
     D.setLeafNodeOrder()
     D.setParameters(omega)
-
 
     return D
