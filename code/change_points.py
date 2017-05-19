@@ -35,6 +35,9 @@ def detectChanges_flat(Gs,w):
     #length of sequence
     seq_n = len(Gs)
     
+    #p-values
+    pvals=[]
+    
     #sliding window
     for start_idx in xrange(seq_n-w+1):
         end_idx = start_idx + w
@@ -45,17 +48,11 @@ def detectChanges_flat(Gs,w):
 
         D_inferred = inference.split_network_spectral_partition(Aw)
         
-        #correct Nr for multiple networks  
-        #~ D_inferred.node[0]['Er']/=w     # NEED TO UPDATE: this only updates the top node!!!
-        
         p,ts,nd = test_posteriorBayesFactor(As[start_idx:end_idx],D_inferred,w)
         
-        plt.figure()
-        plt.hist(nd)
-        plt.axvline(ts)
+        pvals.append(p)
         
-        
-    return D_inferred
+    return pvals
     #~ partition = spectral.spectral_partition(Aw, mode=mode, num_groups=k)
     
     #~ E_rs, N_rs = compute_number_links_between_groups(A,partition)

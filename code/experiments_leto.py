@@ -13,6 +13,7 @@ plt.ion()
 import metrics
 from random import sample
 import sample_networks
+import networkx as nx
 
 
 """
@@ -122,7 +123,7 @@ def test_cp(snr_before = 1, snr_after = 1, n_groups=2):
     n_levels = 1
     K=n_groups**n_levels
     ratio_before = 0.5
-    ratio_after = 0.5
+    ratio_after = 1
     #~ snr_before = 1
     #~ snr_after = 1
     
@@ -153,6 +154,29 @@ def test_cp(snr_before = 1, snr_after = 1, n_groups=2):
     return cp.detectChanges_flat(Gs,w)
     
     
+def runEnron(w=4):
+    #get networks
+    print "Constructing networks..."
+    path_to_data = '../../../Dropbox/Projects/data/enron_min/'
+    with open(path_to_data + 'filelist.txt') as f:
+        netFiles=[file.strip() for file in f.readlines()]
+    
+    Gs=[]
+    
+    for netFile in netFiles:
+        G=nx.Graph()
+        G.add_nodes_from(range(151))
+        
+        with open(path_to_data + netFile) as f:
+            edgeList=np.int32([row.strip().split() for row in f.readlines()])
+        
+        G.add_edges_from(edgeList)
+        
+        Gs.append(G)
+    
+    return cp.detectChanges_flat(Gs,w)
+
+
 
 """
 Test partial pooling
