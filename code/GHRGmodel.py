@@ -49,21 +49,21 @@ class GHRG(nx.DiGraph):
     ## FIRST PART -- MANIPULATIONS OF DENDROGRAM DATA STRUCTURE
     ##
 
-    """
-    Generator for new node numbers
-    NB: Assumes node label 'v' indicates that the node was the vth node added
-    """
     def new_node_generator(self):
+        """
+        Generator for new node numbers
+        NB: Assumes node label 'v' indicates that the node was the vth node added
+        """
         v=len(self)
         while True:
             yield v
             v += 1
 
-    """
-    Adds n_children to parent
-    Returns list of new nodes
-    """
     def add_children(self, parent, n_children):
+        """
+        Adds n_children to parent
+        Returns list of new nodes
+        """
         new_nodes=[]
         new_labels=self.new_node_generator()
         for nc in xrange(n_children):
@@ -78,11 +78,10 @@ class GHRG(nx.DiGraph):
 
         return new_nodes
 
-    """
-    Function to update the N_r and E_r parameters using a fixed probability matrix, omega
-    """
     def setParameters(self, omega):
-
+        """
+        Function to update the N_r and E_r parameters using a fixed probability matrix, omega
+        """
         # print "OMEGA"
         # print omega
         for node in self.nodes_iter():
@@ -118,10 +117,10 @@ class GHRG(nx.DiGraph):
                     self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
 
     def setLeafNodeOrder(self):
-    """
-    Function to identify and store leaf nodes (i.e. dendro nodes with no children) in
-    internal data structure
-    """
+        """
+        Function to identify and store leaf nodes (i.e. dendro nodes with no children) in
+        internal data structure
+        """
         self.leaf_nodes = [v for v in nx.dfs_preorder_nodes(self, self.root_node) if self.out_degree(v) == 0]
 
 
@@ -181,7 +180,6 @@ class GHRG(nx.DiGraph):
             partition[children]=ni
         return partition
 
-
     def lowest_partition(self):
         for node in self.nodes_iter():
             if len(self.successors(node))==0:
@@ -212,8 +210,8 @@ class GHRG(nx.DiGraph):
         return partition
 
     def to_scipy_sparse_matrix(self,G):
+        """ Output graph as sparse matrix"""
         return nx.to_scipy_sparse_matrix(G)
-
 
     def _get_child_params(self,v):
         #recursively obtain child node params
@@ -248,11 +246,12 @@ class GHRG(nx.DiGraph):
         except ValueError:
             return Nr,Er
 
-
     def construct_full_block_params(self):
         return self._get_child_params(self.root_node)
 
     def detectability_report(self):
+        """Report whether block structure is detectable"""
+        # TODO
         pass
 
     ##
@@ -261,13 +260,13 @@ class GHRG(nx.DiGraph):
 
     def generateNetworkBeta(self,mode='Undirected'):
         """
-        Function to generate networks from the model
+        Function to generate networks from the model using beta prior
         """
         return self.generateNetwork(edgeProb='beta')
 
     def generateNetworkExactProb(self,mode='Undirected'):
         """
-        Function to generate networks from the model
+        Function to generate networks from the model using exact probabilities
         """
         return self.generateNetwork(edgeProb='exact')
 
