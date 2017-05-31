@@ -333,8 +333,110 @@ class GHRG(nx.DiGraph):
     ###
     ### PART 4 --- INFERENCE FUNCTIONS (call external function)
     ###
-    #TODO
+    def infer_spectral_partition_flat(self, A, mode='Bethe', num_groups=-1):
+        """ Recursively split graph into pieces by employing a spectral clustering strategy.
 
+        Inputs: A          -- input adjacency matrix
+                mode       -- variant of spectral clustering to use (reg. Laplacian, Bethe Hessian, Non-Backtracking)
+                num_groups -- in how many groups do we want to split the graph at each step
+                              (default: 2; set to -1 to infer number of groups from spectrum)
+
+                Output: networkx dendrogram
+        """
+        # The function consists of mainly two parts
+        # A) call spectral partition algorithm
+        # B) assemble the output into the corresponding DHRG data structure
+
+        ##########
+        # PART (A)
+        nr_nodes = A.shape[0]
+        partition = spectral.spectral_partition(A, mode=mode, num_groups=num_groups)
+
+
+        ##########
+        # PART (B)
+        # initialise networkx output dendrogram, and store some things as properties of the graph
+        # create root node and assign properties
+        self.network_nodes = np.arange(nr_nodes)
+        self.directed = False
+        self.root_node = 0
+
+        # compute link matrices
+        Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=False)
+        # print "Emat, Nmat computed undirected"
+        # print Emat, "\n", Nmat,"\n\n\n"
+        Er_wod = Emat - np.diag(np.diag(Emat))
+        Nr_wod = Nmat - np.diag(np.diag(Nmat))
+
+        # add statistic to root
+        self.add_node(self.root_node, Er=Er_wod, Nr=Nr_wod)
+        self.node[self.root_node]['nnodes'] = self.network_nodes
+        self.node[self.root_node]['n'] = nr_nodes
+
+        # add children
+        nr_groups = partition.max()+1
+        nodes_next_level = self.add_children(self.root_node, nr_groups)
+        self.node[self.root_node]['children'] = nodes_next_level
+
+        # initialize children
+        for i, n in enumerate(nodes_next_level):
+            subpart = partition == i
+            self.node[n]['nnodes'] = subpart.nonzero()[0]
+            self.node[n]['n'] = len(subpart.nonzero()[0])
+            self.node[n]['children'] = []
+            self.node[n]['Er'] = Emat[i,i]
+            self.node[n]['Nr'] = Nmat[i,i]
+
+    def infer_spectral_partition_hier(self, A):
+        """ Recursively split graph into pieces by employing a spectral clustering strategy.
+
+        Inputs: A          -- input adjacency matrix
+                Output: networkx dendrogram
+        """
+        # The function consists of mainly two parts
+        # A) call spectral partition algorithm
+        # B) assemble the output into the corresponding DHRG data structure
+
+        ##########
+        # PART (A)
+        nr_nodes = A.shape[0]
+        partition = spectral.hier_spectral_partition(A)
+
+
+        #TODO: continue here
+        ##########
+        # PART (B)
+        # initialise networkx output dendrogram, and store some things as properties of the graph
+        # create root node and assign properties
+        self.network_nodes = np.arange(nr_nodes)
+        self.directed = False
+        self.root_node = 0
+
+        # compute link matrices
+        Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=False)
+        # print "Emat, Nmat computed undirected"
+        # print Emat, "\n", Nmat,"\n\n\n"
+        Er_wod = Emat - np.diag(np.diag(Emat))
+        Nr_wod = Nmat - np.diag(np.diag(Nmat))
+
+        # add statistic to root
+        self.add_node(self.root_node, Er=Er_wod, Nr=Nr_wod)
+        self.node[self.root_node]['nnodes'] = self.network_nodes
+        self.node[self.root_node]['n'] = nr_nodes
+
+        # add children
+        nr_groups = partition.max()+1
+        nodes_next_level = self.add_children(self.root_node, nr_groups)
+        self.node[self.root_node]['children'] = nodes_next_level
+
+        # initialize children
+        for i, n in enumerate(nodes_next_level):
+            subpart = partition == i
+            self.node[n]['nnodes'] = subpart.nonzero()[0]
+            self.node[n]['n'] = len(subpart.nonzero()[0])
+            self.node[n]['children'] = []
+            self.node[n]['Er'] = Emat[i,i]
+            self.node[n]['Nr'] = Nmat[i,i]
 
 # TODO these functions are to be phased out
     # """
