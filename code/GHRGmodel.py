@@ -3,6 +3,7 @@ import networkx as nx
 import numpy as np
 import scipy.sparse
 from itertools import izip
+import spectral_algorithms as spectral
 
 
 """
@@ -399,23 +400,27 @@ class GHRG(nx.DiGraph):
 
         ##########
         # PART (A)
+        # partition go from finest partition_hier[0] to coarsest partition_hier[-1]
         nr_nodes = A.shape[0]
-        partition = spectral.hier_spectral_partition(A)
+        partition_hier, partition_hier_compressed = spectral.hier_spectral_partition(A)
 
-
-        #TODO: continue here
-        ##########
-        # PART (B)
-        # initialise networkx output dendrogram, and store some things as properties of the graph
-        # create root node and assign properties
         self.network_nodes = np.arange(nr_nodes)
+        # directed here means that the represented network is directed, the dendrogram
+        # is always directed
         self.directed = False
         self.root_node = 0
 
+        print "NUMBER of partiitons"
+        print len(partition_hier)
+
+        ##########
+        # PART (B)
+
+        # 1) Deal with root node first
         # compute link matrices
-        Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=False)
-        # print "Emat, Nmat computed undirected"
-        # print Emat, "\n", Nmat,"\n\n\n"
+        partition = partition_hier.pop()
+        partition_c = partition_hier_compressed.pop()
+        Emat, Nmat = spectral.compute_number_links_between_groups(A, partition, directed=False)
         Er_wod = Emat - np.diag(np.diag(Emat))
         Nr_wod = Nmat - np.diag(np.diag(Nmat))
 
@@ -424,19 +429,70 @@ class GHRG(nx.DiGraph):
         self.node[self.root_node]['nnodes'] = self.network_nodes
         self.node[self.root_node]['n'] = nr_nodes
 
-        # add children
-        nr_groups = partition.max()+1
-        nodes_next_level = self.add_children(self.root_node, nr_groups)
-        self.node[self.root_node]['children'] = nodes_next_level
-
-        # initialize children
-        for i, n in enumerate(nodes_next_level):
+        # add children and initialize children of root
+        nr_groups = partition.max() + 1
+        roots_next_level = self.add_children(self.root_node, nr_groups)
+        self.node[self.root_node]['children'] = roots_next_level
+        for i, n in enumerate(roots_next_level):
             subpart = partition == i
             self.node[n]['nnodes'] = subpart.nonzero()[0]
             self.node[n]['n'] = len(subpart.nonzero()[0])
-            self.node[n]['children'] = []
-            self.node[n]['Er'] = Emat[i,i]
-            self.node[n]['Nr'] = Nmat[i,i]
+            if len(partition_hier) == 0:
+                self.node[n]['children'] = []
+                self.node[n]['Er'] = Emat[i, i]
+                self.node[n]['Nr'] = Nmat[i, i]
+
+        # 2)  There is more than one level beneath the root, so we have to
+        # recursived built the tree
+        while len(partition_hier_compressed) > 0:
+            partition = partition_hier.pop()
+            print "p"
+            print partition
+            partition_c = partition_hier_compressed.pop()
+            print "c"
+            print partition_c
+            print partition == partition_c
+
+            roots_current_level = roots_next_level
+            print roots_next_level
+            roots_next_level = []
+
+            # check current candidate root nodes
+            for index, node_id in enumerate(roots_current_level):
+                print index, node_id
+                # if we are not at the lowest level, we need to add more layers
+                if len(partition) != nr_nodes:
+                    corresponding_nodes = self.node[node_id]['nodes']
+                    subpart = partition[corresponding_nodes]
+                    print "HERE"
+                    print subpart
+                    children_set = self.add_children(node_id, nr_children)
+                    self.node[node_id]['children'] = children_set
+                    roots_next_level = roots_next_level + children_set
+                # if we are at the lowest level, we need to add leaf nodes
+                else:
+                    corresponding_nodes = self.node[node_id]['nnodes']
+                    subpart = partition[corresponding_nodes]
+                    subgroups = np.unique(subpart)
+                    nr_subgroups = subgroups.size
+                    print "HERE"
+                    print subpart
+                    print "nr_subgroups"
+                    print nr_subgroups
+                    children_set = self.add_children(node_id, nr_subgroups)
+                    self.node[node_id]['children'] = children_set
+                    for child in children_set:
+                        subpart = (partition == index)
+                        print subpart
+                        nr_children = subpart.sum()
+                        print nr_children
+                        self.node[child]['children'] = []
+                        self.node[child]['Er'] = Emat[i, i]
+                        self.node[child]['Nr'] = Nmat[i, i]
+                        self.node[child]['nnodes'] = subpart.nonzero()[0]
+                        self.node[child]['n'] = len(subpart.nonzero()[0])
+
+
 
 # TODO these functions are to be phased out
     # """

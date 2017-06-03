@@ -18,6 +18,30 @@ np.set_printoptions(precision=4,linewidth=200)
 # %pylab
 # import experiments_michael
 
+def test_GHRG_hier(n_groups=4):
+    # mean degree and number of nodes etc.
+    n=1600
+    n_levels = 2
+    K=n_groups**n_levels
+    ratio = 0.4
+
+    SNR = 10
+    nsamples = 20
+
+    # create GHRG object with specified parameters and create a sample network from it
+    D_gen=create2paramGHRG(n,SNR,ratio,n_levels,n_groups)
+    partition_true = D_gen.get_lowest_partition()
+
+    G= D_gen.generateNetworkExactProb()
+    A= D_gen.to_scipy_sparse_matrix(G)
+    D = GHRG()
+    D.infer_spectral_partition_hier(A)
+
+    return D
+
+
+
+
 def loop_over_hierarchical_clustering(n_levels = np.array([2, 2, 2]), n= 2**14):
 
     SNR_max = 10
@@ -36,7 +60,7 @@ def loop_over_hierarchical_clustering(n_levels = np.array([2, 2, 2]), n= 2**14):
             # sample hier block model
             A, pvecs_true = sample_networks.sample_hier_block_model(groups_per_level, av_deg = av_degree, nnodes=n, snr=SNR)
 
-            pvecs_inferred = spectral.hier_spectral_partition(A)
+            pvecs_inferred, _ = spectral.hier_spectral_partition(A)
             ol_matrix = metrics.calculate_level_comparison_matrix(pvecs_inferred,pvecs_true)
 
             p,r=metrics.calculate_precision_recall(ol_matrix)
@@ -155,7 +179,7 @@ def test_spectral_algorithms_hier():
 
 
     print "\n\n Hier Partitioning\n"
-    pvecs_inferred = spectral.hier_spectral_partition(A)
+    pvecs_inferred, _ = spectral.hier_spectral_partition(A)
     ol_score = metrics.calculate_level_comparison_matrix(pvecs_inferred,pvecs_true)
     print "\n\nOVERLAP SCORE\n", ol_score, "\n\n"
 

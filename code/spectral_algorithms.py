@@ -30,7 +30,7 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
     # print "\n\n"
     pvec_tot = expand_partitions_to_full_graph(pvec_agg)
 
-    return pvec_tot
+    return pvec_tot, pvec_agg
 
 
 def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
@@ -407,8 +407,8 @@ def cluster_with_SLaplacian_and_model_select(A,num_groups,rho=None,max_k=16,mode
         norm2 = scipy.linalg.norm(proj2)
         # print norm1, norm2
         e = 0.5*(norm1+norm2)
-        print "K, error: "
-        print k, e
+        # print "K, error: "
+        # print k, e
         error[k]=e
 
     local_min = argrelextrema(error,np.less)
@@ -493,7 +493,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
     L = Dtau_sqrt_inv.dot(L.T).T
     L = (L+L.T)/2
 
-    #THIS is not a Laplacian but the normalized adjacency of Rohe et al..
+    #TODO: this is not a Laplacian but the normalized adjacency of Rohe et al..
     ev, evecs = scipy.linalg.eigh(L)
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
@@ -548,10 +548,10 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
             norm2 = scipy.linalg.norm(proj2,2)
             error = .5*(norm1+norm2)
 
-        print "\n\nNorms"
-        print norm1, norm2
-        print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
-        print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
+        # print "\n\nNorms"
+        # print norm1, norm2
+        # print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
+        # print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
         # Note that this should always be fulfilled at k=1
         if error  < thres :#np.sqrt(k / max_k):
             print "Agglomerated into " + str(k) + " groups \n\n"
