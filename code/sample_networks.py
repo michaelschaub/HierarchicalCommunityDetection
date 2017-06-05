@@ -5,33 +5,6 @@ import scipy
 from scipy import linalg
 import random
 
-################
-## DEPRECATED: functions moved to GHRGbuild module (to be deleted later)
-def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
-    print "DEPRECATED: function moved to GHRGbuild module (to be deleted later)"
-    # SNR a= in-weight, b = out-weight
-    # SNR = (a-b)^2 / (ka + k(k-1)*b)
-    # fix SNR and b =r*a
-    # SNR = a^2 *(1-r)^2 / (ka + k(k-1)*ra)
-    # SNR = a * (1-r)^2 / (k + k(k-1)*r)
-    # a = SNR * (k + k(k-1)*r) / (1-r)^2
-    a = snr * (num_cluster + num_cluster*(num_cluster-1)*ratio) / float((1-ratio)**2);
-    b = ratio*a;
-
-    return a, b
-
-def calculateDegreesFromAvDegAndSNR(SNR,av_degree,num_cluster=2):
-    print "DEPRECATED: function moved to GHRGbuild module (to be deleted later)"
-    # SNR, a= in-weight, b = out-weight
-    # SNR = (a-b)^2 / (ka + k(k-1)*b) = (a-b)^2 / [k^2 *av_degree]
-    # av_degree = a/k + (k-1)*b/k = a-b /k + b
-    amb = num_cluster * np.sqrt(av_degree*SNR)
-    b = av_degree - amb/float(num_cluster)
-    a = amb + b
-
-    return a, b
-################
-
 
 def checkDetectabliityGeneralSBM(omega,nc):
     """
