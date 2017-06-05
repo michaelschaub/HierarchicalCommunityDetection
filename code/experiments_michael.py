@@ -18,15 +18,14 @@ np.set_printoptions(precision=4,linewidth=200)
 # %pylab
 # import experiments_michael
 
-def test_GHRG_hier(n_groups=4):
+def test_GHRG_hier(n_groups=2):
     # mean degree and number of nodes etc.
     n=1600
-    n_levels = 2
+    n_levels = 3
     K=n_groups**n_levels
-    ratio = 0.4
+    ratio = 0.3
 
     SNR = 10
-    nsamples = 20
 
     # create GHRG object with specified parameters and create a sample network from it
     D_gen=create2paramGHRG(n,SNR,ratio,n_levels,n_groups)

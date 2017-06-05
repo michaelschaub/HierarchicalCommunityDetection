@@ -429,6 +429,7 @@ class GHRG(nx.DiGraph):
         self.node[self.root_node]['nnodes'] = self.network_nodes
         self.node[self.root_node]['n'] = nr_nodes
 
+        # TODO: remove redundancy for root node case
         # add children and initialize children of root
         nr_groups = partition.max() + 1
         roots_next_level = self.add_children(self.root_node, nr_groups)
@@ -444,143 +445,40 @@ class GHRG(nx.DiGraph):
 
         # 2)  There is more than one level beneath the root, so we have to
         # recursived built the tree
-        while len(partition_hier_compressed) > 0:
+        while len(partition_hier) > 0:
             partition = partition_hier.pop()
-            print "p"
-            print partition
-            partition_c = partition_hier_compressed.pop()
-            print "c"
-            print partition_c
-            print partition == partition_c
 
             roots_current_level = roots_next_level
-            print roots_next_level
             roots_next_level = []
+
+            Emat, Nmat = spectral.compute_number_links_between_groups(A, partition, directed=False)
+            Er_wod = Emat - np.diag(np.diag(Emat))
+            Nr_wod = Nmat - np.diag(np.diag(Nmat))
 
             # check current candidate root nodes
             for index, node_id in enumerate(roots_current_level):
+                print "INDEX, NODE_ID"
                 print index, node_id
                 # if we are not at the lowest level, we need to add more layers
-                if len(partition) != nr_nodes:
-                    corresponding_nodes = self.node[node_id]['nodes']
-                    subpart = partition[corresponding_nodes]
-                    print "HERE"
-                    print subpart
-                    children_set = self.add_children(node_id, nr_children)
-                    self.node[node_id]['children'] = children_set
-                    roots_next_level = roots_next_level + children_set
-                # if we are at the lowest level, we need to add leaf nodes
-                else:
-                    corresponding_nodes = self.node[node_id]['nnodes']
-                    subpart = partition[corresponding_nodes]
-                    subgroups = np.unique(subpart)
-                    nr_subgroups = subgroups.size
-                    print "HERE"
-                    print subpart
-                    print "nr_subgroups"
-                    print nr_subgroups
-                    children_set = self.add_children(node_id, nr_subgroups)
-                    self.node[node_id]['children'] = children_set
-                    for child in children_set:
-                        subpart = (partition == index)
-                        print subpart
-                        nr_children = subpart.sum()
-                        print nr_children
-                        self.node[child]['children'] = []
-                        self.node[child]['Er'] = Emat[i, i]
-                        self.node[child]['Nr'] = Nmat[i, i]
-                        self.node[child]['nnodes'] = subpart.nonzero()[0]
-                        self.node[child]['n'] = len(subpart.nonzero()[0])
+                corresponding_nodes = self.node[node_id]['nnodes']
+                subpart = partition[corresponding_nodes]
+                subgroups = np.unique(subpart)
+                nr_subgroups = subgroups.size
+                index2 = np.ix_(subgroups, subgroups)
+                self.node[node_id]['Er'] = Er_wod[index2]
+                self.node[node_id]['Nr'] = Nr_wod[index2]
 
-
-
-# TODO these functions are to be phased out
-    # """
-    # Function to merge list of nodes in dendrogram and insert a new node in the hierarchy
-    # """
-    # def insert_hier_merge_node(self,node_ids):
-
-        # ##################################################
-        # # 1) preallocate information stored in merged node
-        # joint_nnodes = np.empty(0)
-        # joint_n = 0
-        # n_blocks = len(node_ids)
-
-        # # Check that all nodes are mergeable, i.e., have the same parent node
-        # parent_id = self.predecessors(node_ids[0])[0]
-        # ids = np.empty(len(node_ids),dtype='int')
-        # for counter, node in enumerate(node_ids):
-            # # check consistency of merger
-            # if self.predecessors(node)[0] != parent_id:
-                # print "These two nodes / blocks cannot be merged!"
-                # return False
-
-            # # get indices for Nr and Er arrays
-            # ids[counter] = self.node[parent_id]['children'].index(node)
-
-            # joint_nnodes = np.append(joint_nnodes,self.node[node]['nnodes'])
-            # joint_n = joint_n + self.node[node]['n']
-
-        # # read out info from old nodes and create union / joint
-        # joint_Nr = self.node[parent_id]['Nr'][np.ix_(ids,ids)]
-        # joint_Er = self.node[parent_id]['Er'][np.ix_(ids,ids)]
-
-        # old_children = self.node[parent_id]['children']
-        # pvec = np.zeros(len(self.node[parent_id]['children']),dtype='int')
-
-        # num_new_children = len(old_children) - len(node_ids)
-        # k=0
-        # for ni, old_child in enumerate(old_children):
-            # if old_child in node_ids:
-                # pvec[ni] = num_new_children
-            # else:
-                # pvec[ni] = k
-                # k = k+1
-
-
-        # ##################################################
-        # # create new node and insert joint info
-        # new_label = self.new_node_generator()
-        # new_id = new_label.next()
-        # self.add_node(new_id)
-        # self.node[new_id]['nnodes'] = joint_nnodes
-        # self.node[new_id]['n'] = joint_n
-        # self.node[new_id]['Er'] = joint_Er
-        # self.node[new_id]['Nr'] = joint_Nr
-
-        # # let new node point to old two nodes
-        # self.node[new_id]['children'] = node_ids
-        # for node in node_ids:
-            # self.add_edge(new_id,node)
-
-
-        # ##################################################
-        # # update parent node info and let it point to new node
-        # for node in node_ids:
-            # self.remove_edge(parent_id,node)
-        # self.add_edge(parent_id,new_id)
-
-        # self.node[parent_id]['children']=self.successors(parent_id)
-        # self.node[parent_id]['children'].sort()
-
-        # # Check if this is doing the correct agglomeration here.
-        # pmatrix = create_partition_matrix_from_vector(pvec).toarray()
-        # A = self.node[parent_id]['Nr']
-        # A = pmatrix.T.dot(A).dot(pmatrix)
-        # self.node[parent_id]['Nr'] = A - np.diag(np.diag(A))
-
-        # A = self.node[parent_id]['Er']
-        # A = pmatrix.T.dot(A).dot(pmatrix)
-        # self.node[parent_id]['Er'] = A - np.diag(np.diag(A))
-# def create_partition_matrix_from_vector(partition_vec):
-    # """
-    # Create a partition indicator matrix from a given vector; -1 entries in partition vector will
-    # be ignored and can be used to denote unasigned nodes.
-    # """
-    # nr_nodes = partition_vec.size
-    # k=len(np.unique(partition_vec))
-
-    # partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
-    # return partition_matrix
-
-
+                # print subpart
+                children_set = self.add_children(node_id, nr_subgroups)
+                self.node[node_id]['children'] = children_set
+                roots_next_level = roots_next_level + children_set
+            for i, n in enumerate(roots_next_level):
+                subpart = partition == i
+                print subpart
+                self.node[n]['nnodes'] = subpart.nonzero()[0]
+                self.node[n]['n'] = len(subpart.nonzero()[0])
+                # if leaf node we want to add this information...
+                # note that this will be overwritten in the next iteration
+                self.node[n]['children'] = []
+                self.node[n]['Er'] = Emat[i, i]
+                self.node[n]['Nr'] = Nmat[i, i]
