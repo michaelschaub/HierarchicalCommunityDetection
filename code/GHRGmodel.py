@@ -410,8 +410,6 @@ class GHRG(nx.DiGraph):
         self.directed = False
         self.root_node = 0
 
-        print "NUMBER of partiitons"
-        print len(partition_hier)
 
         ##########
         # PART (B)
@@ -457,8 +455,6 @@ class GHRG(nx.DiGraph):
 
             # check current candidate root nodes
             for index, node_id in enumerate(roots_current_level):
-                print "INDEX, NODE_ID"
-                print index, node_id
                 # if we are not at the lowest level, we need to add more layers
                 corresponding_nodes = self.node[node_id]['nnodes']
                 subpart = partition[corresponding_nodes]
@@ -474,7 +470,6 @@ class GHRG(nx.DiGraph):
                 roots_next_level = roots_next_level + children_set
             for i, n in enumerate(roots_next_level):
                 subpart = partition == i
-                print subpart
                 self.node[n]['nnodes'] = subpart.nonzero()[0]
                 self.node[n]['n'] = len(subpart.nonzero()[0])
                 # if leaf node we want to add this information...
