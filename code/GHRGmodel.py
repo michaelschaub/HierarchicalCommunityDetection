@@ -172,43 +172,40 @@ class GHRG(nx.DiGraph):
             for key in keys:
                 print key, self.node[node][key]
 
-    def partition_level(self,level):
-        #TODO other level except zero
-        partition=np.zeros(self.node[self.root_node]['n'])
-        level_nodes=self.successors(self.root_node)
-        for ni,node in enumerate(level_nodes):
+    def get_partition_at_level(self,level):
+        """Return the partition at a specified level of the dendrogram
+
+            level == 1 corresponds to coarsest (non-trivial) partition detected
+            level == -1 corresponds to finest (non-trival )partition detected
+
+        """
+
+        # global partition at root node
+        part_vector=np.zeros(self.node[self.root_node]['n'])
+
+        nr_levels = nx.dag_longest_path_length(self)
+        if level > nr_levels:
+            raise ValueError("Level specified does not exist")
+        elif level == -1:
+            level = nr_levels
+
+        current_parent_nodes = [self.root_node]
+        for current_level in range(level):
+            current_level_dendro_nodes = []
+            for parent in current_parent_nodes:
+                current_level_dendro_nodes = current_level_dendro_nodes + self.successors(parent)
+            current_parent_nodes = current_level_dendro_nodes
+
+        for ni, node in enumerate(current_parent_nodes):
             children=self.node[node]['nnodes']
-            partition[children]=ni
-        return partition
+            part_vector[children]=ni
 
-    def lowest_partition(self):
-        for node in self.nodes_iter():
-            if len(self.successors(node))==0:
-                children=self.node[node]['nnodes']
-                print node, len(children), children
+        return part_vector, current_parent_nodes
 
-    def get_highest_partition(self):
-        partition=np.zeros(self.node[self.root_node]['n'])
-        # print len(partition)
-        pi=0
-        for node in self.node[0]['children']:
-            children=self.node[node]['nnodes']
-            #~ print node, len(children), children
-            partition[children]=pi
-            pi+=1
-        return partition
+    def get_number_of_levels(self):
+        nr_levels = nx.dag_longest_path_length(self)
+        return nr_levels
 
-    def get_lowest_partition(self):
-        partition=np.zeros(self.node[self.root_node]['n'])
-        # print len(partition)
-        pi=0
-        for node in self.nodes_iter():
-            if len(self.successors(node))==0:
-                children=self.node[node]['nnodes']
-                #~ print node, len(children), children
-                partition[children]=pi
-                pi+=1
-        return partition
 
     def to_scipy_sparse_matrix(self,G):
         """ Output graph as sparse matrix"""

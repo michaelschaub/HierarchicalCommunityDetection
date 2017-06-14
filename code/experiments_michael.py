@@ -1,4 +1,5 @@
 from GHRGmodel import GHRG
+import GHRGbuild
 import spectral_algorithms as spectral
 import inference
 import metrics
@@ -18,18 +19,17 @@ np.set_printoptions(precision=4,linewidth=200)
 # %pylab
 # import experiments_michael
 
-def test_GHRG_hier(n_groups=2):
+def test_GHRG_hier(groups_per_level=2):
     # mean degree and number of nodes etc.
     n=1600
     n_levels = 3
-    K=n_groups**n_levels
-    ratio = 0.3
+    K=groups_per_level**n_levels
+    av_degree = 30
 
-    SNR = 10
+    snr = 10
 
-    # create GHRG object with specified parameters and create a sample network from it
-    D_gen=create2paramGHRG(n,SNR,ratio,n_levels,n_groups)
-    partition_true = D_gen.get_lowest_partition()
+    a,b = GHRGbuild.calculateDegreesFromAvDegAndSNR(snr,av_degree,groups_per_level)
+    D_gen=GHRGbuild.create2paramGHRG(n,snr,av_degree,n_levels,groups_per_level)
 
     G= D_gen.generateNetworkExactProb()
     A= D_gen.to_scipy_sparse_matrix(G)
@@ -284,77 +284,6 @@ def plot_results_overlap(SNR,overlap_Bethe,overlap_Rohe,overlap_Seidel):
     plt.legend()
     plt.xlabel("SNR")
     plt.ylabel("overlap score")
-
-
-
-"""
-Function to create a test GHRG for simulations
-parameters:
-    n   : number of nodes
-    n_levels    : depth of GHRG
-    groups_per_level     : number of groups at each level
-"""
-def create2paramGHRG(n,snr,ratio,n_levels,groups_per_level):
-
-    #interaction probabilities
-    omega={}
-    n_this_level = n
-    for level in xrange(n_levels):
-        # cin, cout = calculateDegrees(cm,ratio,groups_per_level)
-        cin, cout = sample_networks.calculateDegreesFromSNR(snr,ratio,groups_per_level)
-        print "Hierarchy Level: ", level, '| KS Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n_this_level,cout/n_this_level
-        # Omega is assigned on a block level, i.e. for each level we have one omega array
-        # this assumes a perfect hierarchy with equal depth everywhere
-        omega[level] = np.ones((groups_per_level,groups_per_level))*cout/n_this_level + np.eye(groups_per_level)*(cin/n_this_level-cout/n_this_level)
-        if np.any(omega[level]>=1):
-            print "no probability > 1 not allowed"
-            raise ValueError("Something wrong")
-        n_this_level = n_this_level / float(groups_per_level)
-        if np.floor(n_this_level) != n_this_level:
-            print "Rounding number of nodes"
-
-
-    D=GHRG()
-
-    #network_nodes contains an ordered list of the network nodes
-    # order is important so that we can efficiently create views at each
-    # internal dendrogram node
-    D.network_nodes = np.arange(n)
-    D.directed = False
-    D.self_loops = False
-
-    # create root node and store attribues of graph in it
-    # this corresponds to an unclustered graph
-    D.root_node = 0
-    D.add_node(D.root_node, Er=np.zeros((groups_per_level,groups_per_level)), Nr=np.zeros((groups_per_level,groups_per_level)))
-    D.node[D.root_node]['nnodes'] = D.network_nodes[:]
-    D.node[D.root_node]['n'] = n
-
-    # split network into groups -- add children in dendrogram
-    nodes_this_level = D.add_children(D.root_node, groups_per_level)
-    for ci, child in enumerate(nodes_this_level):
-        D.node[child]['nnodes'] = D.node[D.root_node]['nnodes'][ci*n/groups_per_level:(ci+1)*n/groups_per_level]
-        D.node[child]['n'] = len(D.node[child]['nnodes'])
-
-    #construct dendrogram breadth first
-    for nl in xrange(n_levels-1):
-        nodes_last_level=list(nodes_this_level)
-        nodes_this_level=[]
-        for parent in nodes_last_level:
-            children=D.add_children(parent, groups_per_level)
-            nodes_this_level.extend(children)
-
-            #create local view of network node assignment
-            level_n=len(D.node[parent]['nnodes'])
-            for ci,child in enumerate(children):
-                D.node[child]['nnodes'] = D.node[D.predecessors(child)[0]]['nnodes'][ci*level_n/groups_per_level:(ci+1)*level_n/groups_per_level]
-                D.node[child]['n'] = len(D.node[child]['nnodes'])
-
-    D.setLeafNodeOrder()
-    D.setParameters(omega)
-
-    return D
-
 
 def run_test_ErNr_for_Leto(n_groups=2):
     # mean degree and number of nodes etc.
