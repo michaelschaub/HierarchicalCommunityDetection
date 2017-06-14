@@ -407,36 +407,12 @@ class GHRG(nx.DiGraph):
         self.directed = False
         self.root_node = 0
 
-
-        ##########
-        # PART (B)
-
-        # 1) Deal with root node first
-        # compute link matrices
-        partition = partition_hier.pop()
-        partition_c = partition_hier_compressed.pop()
-        Emat, Nmat = spectral.compute_number_links_between_groups(A, partition, directed=False)
-        Er_wod = Emat - np.diag(np.diag(Emat))
-        Nr_wod = Nmat - np.diag(np.diag(Nmat))
-
-        # add statistic to root
-        self.add_node(self.root_node, Er=Er_wod, Nr=Nr_wod)
+        # add root
+        self.add_node(self.root_node)
         self.node[self.root_node]['nnodes'] = self.network_nodes
         self.node[self.root_node]['n'] = nr_nodes
 
-        # TODO: remove redundancy for root node case
-        # add children and initialize children of root
-        nr_groups = partition.max() + 1
-        roots_next_level = self.add_children(self.root_node, nr_groups)
-        self.node[self.root_node]['children'] = roots_next_level
-        for i, n in enumerate(roots_next_level):
-            subpart = partition == i
-            self.node[n]['nnodes'] = subpart.nonzero()[0]
-            self.node[n]['n'] = len(subpart.nonzero()[0])
-            if len(partition_hier) == 0:
-                self.node[n]['children'] = []
-                self.node[n]['Er'] = Emat[i, i]
-                self.node[n]['Nr'] = Nmat[i, i]
+        roots_next_level = [self.root_node]
 
         # 2)  There is more than one level beneath the root, so we have to
         # recursived built the tree
