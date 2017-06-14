@@ -247,7 +247,7 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
         partition_vector = np.zeros(A.shape[0],dtype='int')
         return partition_vector
 
-    if mode == 'weighted':
+    if mode == 'unweighted':
         BH_pos = build_BetheHessian(A,r)
         BH_neg = build_BetheHessian(A,-r)
     elif mode == 'weighted':
