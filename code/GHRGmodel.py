@@ -331,7 +331,7 @@ class GHRG(nx.DiGraph):
     ###
     ### PART 4 --- INFERENCE FUNCTIONS (call external function)
     ###
-    def infer_spectral_partition_flat(self, A, mode='Bethe', num_groups=-1):
+    def infer_spectral_partition_flat(self, A, mode='Bethe', num_groups=-1, regularizer='BHa'):
         """ Recursively split graph into pieces by employing a spectral clustering strategy.
 
         Inputs: A          -- input adjacency matrix
@@ -348,7 +348,7 @@ class GHRG(nx.DiGraph):
         ##########
         # PART (A)
         nr_nodes = A.shape[0]
-        partition = spectral.spectral_partition(A, mode=mode, num_groups=num_groups)
+        partition = spectral.spectral_partition(A, mode=mode, num_groups=num_groups, regularizer=regularizer)
 
 
         ##########

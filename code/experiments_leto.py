@@ -1,6 +1,7 @@
 from __future__ import division
 import numpy as np
 from GHRGmodel import GHRG
+import GHRGmodel
 import spectral_algorithms as spectral
 import inference
 import metrics
@@ -14,7 +15,78 @@ import metrics
 from random import sample
 import sample_networks
 import networkx as nx
+import scipy.sparse as sparse
 
+
+
+def clique_test(n_cliques=64, clique_size=10,noise=0.01,A=None,K_known=False,regularizer='BHa'):
+    if A is None:
+        A = construct_cliques(n_cliques=64, clique_size=10,noise=0.01)
+    print "infer"
+    D=GHRGmodel.GHRG()
+    if K_known:
+        D.infer_spectral_partition_flat(A,num_groups=n_cliques, regularizer=regularizer)
+    else:
+        D.infer_spectral_partition_flat(A)
+    print D.nodes()
+    return D
+
+def construct_cliques(n_cliques=64, clique_size=10,noise=0.01):
+    block=sparse.coo_matrix(np.ones((clique_size,clique_size)))
+    blocks=[]
+    print "construct"
+    for nc in xrange(n_cliques):
+        blocks.append(block)
+    
+    A=sparse.block_diag(blocks).astype('bool')
+    noise_matrix=sparse.random(n_cliques*clique_size,n_cliques*clique_size,noise/2).astype('bool')
+    noise_matrix=noise_matrix+noise_matrix.T
+    print noise_matrix.sum(), "noise elements added", (n_cliques*clique_size)**2
+    A_noisy=((A+noise_matrix)-(A*noise_matrix)).astype('int')
+    return A_noisy
+
+def clique_test_batch(n_cliques=64, regularizer='BHa'):
+    noise_levels=10**np.arange(-5,-.5,0.1)
+    runs=5000
+    
+    clique_size=10
+    file='out/resolution_BHm.txt'
+    
+    results=np.zeros(len(noise_levels))
+    for i in xrange(runs):
+        for ni,noise in enumerate(noise_levels):
+        
+            try:
+                A=construct_cliques(n_cliques, clique_size, noise)
+                D=clique_test(n_cliques=64, clique_size=10,noise=0.01,A=A,K_known=False, regularizer=regularizer)
+                results[ni]+=len(D.nodes())-1
+            except:
+                A=construct_cliques(n_cliques, clique_size, noise)
+                D=clique_test(n_cliques=64, clique_size=10,noise=0.01,A=A,K_known=False, regularizer=regularizer)
+                results[ni]+=len(D.nodes())-1
+            with open(file,'a') as f:
+                f.write('%i ' % (len(D.nodes())-1))
+        with open(file,'a') as f:
+            f.write('\n')
+
+def plot_res(regularizer=None, noise_levels=10**np.arange(-5,-.5,0.1)):
+    if regularizer is None:
+        file='out/resolution.txt'
+    else:
+        file='out/resolution_BHm.txt'
+    
+    with open(file) as f:
+        results = np.float64([row.strip().split() for row in f.readlines()[:-1]])
+    print len(results)
+    results = np.mean(results,0)
+    plt.figure()
+    plt.semilogx(noise_levels,results,lw=2)
+    plt.xticks(size=20)
+    plt.yticks(size=20)
+    plt.xlabel('noise',size=24)
+    plt.ylabel('number groups detected',size=24)
+    plt.axhline(64)
+    plt.tight_layout()
 
 """
 Test overlap precision and recall
