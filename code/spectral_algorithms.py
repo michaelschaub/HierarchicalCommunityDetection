@@ -107,7 +107,7 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap"):
     return pvec
 
 
-def spectral_partition(A, mode='Lap', num_groups=2):
+def spectral_partition(A, mode='Lap', num_groups=2, regularizer='BHa'):
     """ Perform one round of spectral clustering for a given network matrix A
     Inputs: A -- input adjacency matrix
             mode -- variant of spectral clustering to use (Laplacian, Bethe Hessian,
@@ -123,7 +123,7 @@ def spectral_partition(A, mode='Lap', num_groups=2):
             partition, _ = regularized_laplacian_spectral_clustering(A,num_groups=num_groups)
 
     elif mode == "Bethe":
-        partition = cluster_with_BetheHessian(A,num_groups=num_groups,mode='weighted')
+        partition = cluster_with_BetheHessian(A,num_groups=num_groups,mode='weighted', regularizer=regularizer)
 
     elif mode == "NonBack":
         pass
