@@ -123,7 +123,7 @@ def spectral_partition(A, mode='Lap', num_groups=2, regularizer='BHa'):
             partition, _ = regularized_laplacian_spectral_clustering(A,num_groups=num_groups)
 
     elif mode == "Bethe":
-        partition = cluster_with_BetheHessian(A,num_groups=num_groups,mode='weighted', regularizer=regularizer)
+        partition = cluster_with_BetheHessian(A,num_groups=num_groups,mode='unweighted', regularizer=regularizer)
 
     elif mode == "NonBack":
         pass

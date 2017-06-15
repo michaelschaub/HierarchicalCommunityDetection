@@ -66,8 +66,8 @@ def overlap_score(partition, true_partition):
     if num_groups2 != num_groups:
         print "partitions with different number of groups"
 
-    if num_groups < num_groups2:
-        num_groups = num_groups2
+    # if num_groups < num_groups2:
+        # num_groups = num_groups2
 
     overlap_score  = (raw_overlap/num_nodes - 1/num_groups)/(1-1/num_groups)
     return overlap_score
