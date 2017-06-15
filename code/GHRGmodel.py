@@ -206,6 +206,16 @@ class GHRG(nx.DiGraph):
         nr_levels = nx.dag_longest_path_length(self)
         return nr_levels
 
+    def get_partition_all(self):
+        """ Return list with all partitions in the dendrogram"""
+        pvecs= []
+        num_levels = self.get_number_of_levels()
+        for ii in xrange(1,num_levels+1):
+            partition_true, _ = self.get_partition_at_level(ii)
+            pvecs.append(partition_true)
+
+        return pvecs
+
 
     def to_scipy_sparse_matrix(self,G):
         """ Output graph as sparse matrix"""
