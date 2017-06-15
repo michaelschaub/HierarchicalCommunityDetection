@@ -2,6 +2,7 @@ from __future__ import division
 import numpy as np
 from GHRGmodel import GHRG
 import GHRGmodel
+import GHRGbuild
 import spectral_algorithms as spectral
 import inference
 import metrics
@@ -18,6 +19,15 @@ import networkx as nx
 import scipy.sparse as sparse
 
 
+
+def zoom_exp():
+    A=construct_cliques(n_cliques=64, clique_size=10,noise=1e-5)
+    D=GHRGmodel.GHRG()
+    D.infer_spectral_partition_hier(A)
+    
+
+
+########## RESOLUTION TEST ################
 
 def clique_test(n_cliques=64, clique_size=10,noise=0.01,A=None,K_known=False,regularizer='BHa'):
     if A is None:
@@ -87,6 +97,9 @@ def plot_res(regularizer=None, noise_levels=10**np.arange(-5,-.5,0.1)):
     plt.ylabel('number groups detected',size=24)
     plt.axhline(64)
     plt.tight_layout()
+
+##########################################
+
 
 """
 Test overlap precision and recall
