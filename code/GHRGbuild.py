@@ -58,6 +58,7 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
         n_this_level = n_this_level / float(groups_per_level)
         if np.floor(n_this_level) != n_this_level:
             print "Rounding number of nodes"
+        c_bar=(cin/n_this_level)*(n_this_level / float(groups_per_level))
 
 
     D=GHRGmodel.GHRG()
