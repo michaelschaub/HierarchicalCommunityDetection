@@ -403,7 +403,7 @@ class GHRG(nx.DiGraph):
         """
         # The function consists of mainly two parts
         # A) call spectral partition algorithm
-        # B) assemble the output into the corresponding DHRG data structure
+        # B) assemble the output into the corresponding GHRG data structure
 
         ##########
         # PART (A)

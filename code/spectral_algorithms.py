@@ -264,7 +264,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
 
         relevant_ev, lambda2 = find_negative_eigenvectors(BH_neg)
         X = np.hstack([X, relevant_ev])
-        # print X.shape
+        print "number nodes /groups"
+        print X.shape
         # print "Xvectors"
         # print X
         num_groups = X.shape[1]

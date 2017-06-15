@@ -2,6 +2,7 @@ from __future__ import division
 import numpy as np
 from GHRGmodel import GHRG
 import GHRGmodel
+import GHRGbuild
 import spectral_algorithms as spectral
 import inference
 import metrics
@@ -16,8 +17,40 @@ from random import sample
 import sample_networks
 import networkx as nx
 import scipy.sparse as sparse
+from scipy.stats import norm
 
 
+
+def test_overlap(snr=0.5,c_bar=5):
+    n=2048
+    
+    n_levels=2
+    groups_per_level=2
+    D=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
+    pvec = D.get_partition_all()
+    
+    G=D.generateNetworkExactProb()
+    A=D.to_scipy_sparse_matrix(G)
+    
+    D_inf=GHRGmodel.GHRG()
+    D_inf.infer_spectral_partition_flat(A)
+    pvec_inf = D_inf.get_partition_all()
+    
+    return metrics.calculate_level_comparison_matrix(pvec_inf,pvec)
+    
+
+########## ZOOM TEST ################
+
+def zoom_exp(n_cliques=64, noise=1e-5):
+    A=construct_cliques(n_cliques=n_cliques, clique_size=10,noise=noise)
+    D=GHRGmodel.GHRG()
+    D.infer_spectral_partition_hier(A)
+    pvec = D.get_partition_all()
+    print [len(np.unique(p)) for p in pvec]
+    return pvec
+
+
+########## RESOLUTION TEST ################
 
 def clique_test(n_cliques=64, clique_size=10,noise=0.01,A=None,K_known=False,regularizer='BHa'):
     if A is None:
@@ -32,7 +65,9 @@ def clique_test(n_cliques=64, clique_size=10,noise=0.01,A=None,K_known=False,reg
     return D
 
 def construct_cliques(n_cliques=64, clique_size=10,noise=0.01):
-    block=sparse.coo_matrix(np.ones((clique_size,clique_size)))
+    np.random.seed(np.random.randint(2**31))
+    
+    block=sparse.coo_matrix(np.ones((clique_size,clique_size))-np.diag(np.ones(clique_size)))
     blocks=[]
     print "construct"
     for nc in xrange(n_cliques):
@@ -40,38 +75,47 @@ def construct_cliques(n_cliques=64, clique_size=10,noise=0.01):
     
     A=sparse.block_diag(blocks).astype('bool')
     noise_matrix=sparse.random(n_cliques*clique_size,n_cliques*clique_size,noise/2).astype('bool')
-    noise_matrix=noise_matrix+noise_matrix.T
-    print noise_matrix.sum(), "noise elements added", (n_cliques*clique_size)**2
-    A_noisy=((A+noise_matrix)-(A*noise_matrix)).astype('int')
+    noise_matrix=(noise_matrix+noise_matrix.T).astype('bool')
+    print noise, noise_matrix.sum(), "noise elements added", (n_cliques*clique_size)**2
+    A_noisy=((A+noise_matrix)-(A*noise_matrix)).astype('float')
+    
+    rvs = norm(0, 0.01).rvs
+    
+    nnoise=sparse.random(n_cliques*clique_size,n_cliques*clique_size,5e-3,data_rvs=rvs)
+    print nnoise.sum(), nnoise.astype('bool').sum(), "nnoise elements added", (n_cliques*clique_size)**2
+    A_noisy=A_noisy+nnoise
     return A_noisy
 
+def noise_levels(n_cliques):
+    min_noise = {128:-5.5,64:-5,32:-4.5,16:-4}[n_cliques]
+    return 10**np.arange(min_noise,-.5,0.1)
+
 def clique_test_batch(n_cliques=64, regularizer='BHa'):
-    noise_levels=10**np.arange(-5,-.5,0.1)
-    runs=5000
+    
+    runs=50
     
     clique_size=10
-    file='out/resolution_BHm.txt'
+    file='out/resolution%i.txt' % n_cliques
     
-    results=np.zeros(len(noise_levels))
     for i in xrange(runs):
-        for ni,noise in enumerate(noise_levels):
+        for ni,noise in enumerate(noise_levels(n_cliques)):
         
             try:
                 A=construct_cliques(n_cliques, clique_size, noise)
                 D=clique_test(n_cliques=64, clique_size=10,noise=0.01,A=A,K_known=False, regularizer=regularizer)
-                results[ni]+=len(D.nodes())-1
+                
             except:
                 A=construct_cliques(n_cliques, clique_size, noise)
                 D=clique_test(n_cliques=64, clique_size=10,noise=0.01,A=A,K_known=False, regularizer=regularizer)
-                results[ni]+=len(D.nodes())-1
+                
             with open(file,'a') as f:
                 f.write('%i ' % (len(D.nodes())-1))
         with open(file,'a') as f:
             f.write('\n')
 
-def plot_res(regularizer=None, noise_levels=10**np.arange(-5,-.5,0.1)):
+def plot_res(n_cliques=64, regularizer=None):
     if regularizer is None:
-        file='out/resolution.txt'
+        file='out/resolution%i.txt' % n_cliques
     else:
         file='out/resolution_BHm.txt'
     
@@ -80,13 +124,16 @@ def plot_res(regularizer=None, noise_levels=10**np.arange(-5,-.5,0.1)):
     print len(results)
     results = np.mean(results,0)
     plt.figure()
-    plt.semilogx(noise_levels,results,lw=2)
+    plt.semilogx(noise_levels(n_cliques),results,lw=2)
     plt.xticks(size=20)
     plt.yticks(size=20)
     plt.xlabel('noise',size=24)
     plt.ylabel('number groups detected',size=24)
-    plt.axhline(64)
+    plt.axhline(n_cliques)
     plt.tight_layout()
+
+##########################################
+
 
 """
 Test overlap precision and recall
