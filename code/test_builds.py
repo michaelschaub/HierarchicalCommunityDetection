@@ -77,3 +77,25 @@ def test_GHRG_inference_flat():
     partition_inf = D.get_lowest_partition()
     assert sum(partition_inf == partition_true)/n >= 0.995
 
+def test_GHRG_inference_hier():
+    # mean degree and number of nodes etc.
+    n=1600
+    n_groups = 8
+    n_levels = 1
+    K=n_groups**n_levels
+    av_degree = 20
+
+
+    SNR = 10
+
+    # create GHRG object with specified parameters and create a sample network from it
+    D_gen=GHRGbuild.create2paramGHRG(n,SNR,av_degree,n_levels,n_groups)
+    G= D_gen.generateNetworkExactProb()
+    A= D_gen.to_scipy_sparse_matrix(G)
+    partition_true = D_gen.get_lowest_partition()
+
+    D = GHRGmodel.GHRG()
+    D.infer_spectral_partition_flat(A)
+
+    partition_inf = D.get_lowest_partition()
+    assert sum(partition_inf == partition_true)/n >= 0.995

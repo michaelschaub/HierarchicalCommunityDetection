@@ -19,7 +19,7 @@ np.set_printoptions(precision=4,linewidth=200)
 # %pylab
 # import experiments_michael
 
-def test_GHRG_hier(groups_per_level=2):
+def test_GHRG_hier(groups_per_level=4):
     # mean degree and number of nodes etc.
     n=1600
     n_levels = 3
