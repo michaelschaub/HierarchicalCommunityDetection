@@ -41,7 +41,6 @@ def test_GHRG_inference_hier():
 
     snr = 10
 
-    a,b = GHRGbuild.calculateDegreesFromAvDegAndSNR(snr,av_degree,groups_per_level)
     D_gen=GHRGbuild.create2paramGHRG(n,snr,av_degree,n_levels,groups_per_level)
     G= D_gen.generateNetworkExactProb()
     A= D_gen.to_scipy_sparse_matrix(G)
