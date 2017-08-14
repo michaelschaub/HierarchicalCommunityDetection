@@ -8,13 +8,13 @@ from matplotlib import pyplot as plt
 
 
 
-def loop_over_hierarchical_clustering(n_levels = 2, groups_per_level =2 , n= 2**13):
+def loop_over_hierarchical_clustering(n_levels = 3, groups_per_level =2 , n= 2**13):
 
     SNR_max = 1
-    SNR_min = -1
-    SNR_step = .2
+    SNR_min = -0.5
+    SNR_step = .25
     SNR_range = 10**np.arange(SNR_min,SNR_max+SNR_step,SNR_step)
-    av_degree = 12
+    av_degree = 20
     nsamples = 20
 
     precision = np.zeros((nsamples,SNR_range.shape[0]))

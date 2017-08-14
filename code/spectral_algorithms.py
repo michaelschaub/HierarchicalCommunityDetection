@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from __future__ import division
+import scipy
 import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg as linalg
@@ -10,6 +11,8 @@ from sklearn import mixture
 from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
+import scipy.linalg
+import scipy.random
 
 def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe'):
 
@@ -551,10 +554,10 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
 
         # print "\n\nNorms"
         # print norm1, norm2
-        # print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
-        # print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
+        print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
+        print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
         # Note that this should always be fulfilled at k=1
-        if error  < thres :#np.sqrt(k / max_k):
+        if error/ np.sqrt(max_k)  < thres:
             print "Agglomerated into " + str(k) + " groups \n\n"
             return k, partition_vec, H, error
 
@@ -574,6 +577,7 @@ def project_orthogonal_to(subspace_basis,vectors_to_project):
     vectors_to_project: project these vectors into the orthogonal complement of the
     specified subspace
     """
+
     if not scipy.sparse.issparse(vectors_to_project):
         V = np.matrix(vectors_to_project)
     else:
@@ -590,7 +594,71 @@ def project_orthogonal_to(subspace_basis,vectors_to_project):
     orthogonal_proj = V - projected
     return orthogonal_proj
 
+##################################################
+# QR Decomposition for finding clusters
+##################################################
 
+def clusterEVwithQR(EV, randomized=False, gamma=4):
+    """Given a set of eigenvectors find the clusters of the SBM"""
+    if randomized is True:
+        Z, Q = orthogonalizeQR_randomized(EV,gamma)
+    else:
+        Z, Q = orthogonalizeQR(EV)
+
+    cluster_ = scipy.absolute(Z).argmax(axis=0)
+
+    return cluster_
+
+
+
+def orthogonalizeQR(EV):
+    """Given a set of eigenvectors V coming from a operator associated to the SBM,
+    use QR decomposition as described in Damle et al 2017, to compute new coordinate
+    vectors aligned with clustering vectors
+    Input EV is an N x k matrix where each column corresponds to an eigenvector
+    """
+    k = EV.shape[1]
+    Q, R, P = scipy.linalg.qr(EV.T, mode='economic', pivoting=True)
+    # get indices of k representative points
+    P = P[:k]
+
+    # polar decomposition to find nearest orthogonal matrix
+    U, S, V = scipy.linalg.svd(EV[P,:].T,full_matrices=False)
+
+    Z = EV.dot(U.dot(V.T))
+
+    return Z, Q
+
+
+def orthogonalizeQR_randomized(EV,gamma=4):
+    """Given a set of eigenvectors V coming from a operator associated to the SBM,
+    use randomized QR decomposition as described in Damle et al 2017, to compute new
+    coordinate vectors aligned with clustering vectors.
+
+    Input EV is an N x k matrix where each column corresponds to an eigenvector
+    gamma is the oversampling factor
+    """
+    n, k = EV.shape
+
+    # sample EV according to leverage scores and the build QR from those vectors
+    count = scipy.minimum(scipy.ceil(gamma*k*scipy.log(k)),n)
+    elements = np.arange(n)
+    prob = (EV.T**2).sum(axis=0)
+    probabilites = prob / prob.sum()
+    elements = scipy.random.choice(elements, count, p=probabilities)
+    ellemens = scipy.unique(elements)
+
+
+    Q, R, P = scipy.linalg.qr(EV[elements,:].T, mode='economic', pivoting=True)
+    # get indices of k representative points
+    P = P[:k]
+
+    # polar decomposition to find nearest orthogonal matrix
+    U, S, V = scipy.linalg.svd(EV[P,:].T,full_matrices=False)
+
+    Z = EV.dot(U.dot(V.T))
+
+    return Z, Q
 
 #######################################################
 # HELPER FUNCTIONS
