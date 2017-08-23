@@ -12,7 +12,6 @@ from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
 import scipy.linalg
-import scipy.random
 
 def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe'):
 
