@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 import spectral_algorithms as spectral
-import inference
+#~ import inference
 import networkx as nx
 import model_selection
 from itertools import izip

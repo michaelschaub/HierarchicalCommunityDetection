@@ -12,9 +12,10 @@ from matplotlib import pyplot as plt
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
 import scipy.linalg
-import scipy.random
+from sys import stdout
+#~ import scipy.random      ### NO SUCH MODULE!?  
 
-def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe'):
+def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe',thresh_method='analytic'):
 
     # initial spectral clustering, performed according to method 'first pass'
     p0 = spectral_partition(A,mode=first_pass,num_groups=-1)
@@ -27,12 +28,12 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
     # print "\n\n"
 
     # agglomerate builds list of all partitions
-    pvec_agg = hier_spectral_partition_agglomerate(A,pvec_zoom, mode=method_agg)
+    pvec_agg = hier_spectral_partition_agglomerate(A,pvec_zoom, mode=method_agg,thresh_method=thresh_method)
     # print "Aggregation RESULTS:"
     # print pvec_agg
     # print "\n\n"
     pvec_tot = expand_partitions_to_full_graph(pvec_agg)
-
+    
     return pvec_tot, pvec_agg
 
 
@@ -85,7 +86,7 @@ def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
     return partition
 
 
-def hier_spectral_partition_agglomerate(A, partition, mode="Lap"):
+def hier_spectral_partition_agglomerate(A, partition, mode="Lap",thresh_method='analytic'):
     """Performs hierarchical agglomeration of adjacency matrix and provided partition,
         based on the provided mode parameter"""
 
@@ -101,11 +102,13 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap"):
         # print "Aggregated network:"
         # print links_between_groups
         if mode == "Lap":
-            k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups)
+            k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups,method=thresh_method)
         else:
             pass
         if partition is not None:
             pvec.append(partition)
+        
+        print '\n\n\n LEVELS \n', len(pvec), '\n\n\n'
 
     return pvec
 
@@ -478,24 +481,18 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
-def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
+def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F',method='analytic'):
 
     max_k = Omega.shape[0]
     #TODO: we might want to adjust this later on
     thres = 0.05
-
+    
+    L, Dtau_sqrt_inv = construct_normalised_Laplacian(Omega, reg)
     if reg:
         # set tau to average degree
         tau = Omega.sum()/Omega.shape[0]
     else:
         tau = 0
-
-    # construct Laplacian
-    Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(Omega.sum(1)).flatten() + tau,-.5),0)
-    # print Omega
-    L = Dtau_sqrt_inv.dot(Omega)
-    L = Dtau_sqrt_inv.dot(L.T).T
-    L = (L+L.T)/2
 
     #TODO: this is not a Laplacian but the normalized adjacency of Rohe et al..
     ev, evecs = scipy.linalg.eigh(L)
@@ -506,60 +503,24 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
     # print evecs
 
     for k in xrange(max_k-1,1,-1):
-        if mode == 'DCSBM':
-            V = evecs[:,:k]
-            # print "V"
-            # print V
-            X = preprocessing.normalize(V, axis=1, norm='l2')
-            clust = KMeans(n_clusters = k)
-            clust.fit(X)
-            partition_vec = clust.labels_
-            partition_vec = relabel_partition_vec(partition_vec)
-            # print partition_vec
-
-            H = create_partition_matrix_from_vector(partition_vec)
-            Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
-            H = Dtau_sqrt.dot(H)
-
-        elif mode == 'SBM':
-            V = evecs[:,:k]
-            # print "V"
-            # print V
-            # X = preprocessing.normalize(V, axis=1, norm='l2')
-            X = Dtau_sqrt_inv* V
-            clust = KMeans(n_clusters = k)
-            clust.fit(X)
-            partition_vec = clust.labels_
-            partition_vec = relabel_partition_vec(partition_vec)
-            # print partition_vec
-
-            H = create_partition_matrix_from_vector(partition_vec)
-            # H = Dtau_sqrt_inv.dot(H)
+        partition_vec, H, error = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
+        
+        if method=='analytic':
+            print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
+            print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
+            # Note that this should always be fulfilled at k=1
+            if error/ np.sqrt(max_k)  < thres:
+                print "Agglomerated into " + str(k) + " groups \n\n"
+                return k, partition_vec, H, error
+        elif method=='bootstrap':
+            null_dist = bootstrap_null_projection_error(Omega,k,reg,norm,mode)
+            pval=np.sum(error>=null_dist)/len(null_dist)
+            print 'K',k,'error:',error, 'Null dist:[',np.min(null_dist),np.max(null_dist),']  p-val', pval
+            if pval< thres:
+                print "Agglomerated into " + str(k) + " groups \n\n"
+                return k, partition_vec, H, error
         else:
             error('something went wrong. Please specify valid mode')
-
-        # normalize column norm to 1 of the partition indicator matrices
-        H = preprocessing.normalize(H,axis=0,norm='l2')
-        proj1 = project_orthogonal_to(H,V)
-        proj2 = project_orthogonal_to(V,H)
-
-        if norm == 'F':
-            norm1 = scipy.linalg.norm(proj1)
-            norm2 = scipy.linalg.norm(proj2)
-            error = 0.5*(norm1+norm2)/np.sqrt(k)
-        elif norm == '2':
-            norm1 = scipy.linalg.norm(proj1,2)
-            norm2 = scipy.linalg.norm(proj2,2)
-            error = .5*(norm1+norm2)
-
-        # print "\n\nNorms"
-        # print norm1, norm2
-        print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
-        print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
-        # Note that this should always be fulfilled at k=1
-        if error/ np.sqrt(max_k)  < thres:
-            print "Agglomerated into " + str(k) + " groups \n\n"
-            return k, partition_vec, H, error
 
     partition_vec = None
     H = -1
@@ -567,6 +528,89 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F'):
     error = -1
     print "Final agglomeration -- no \n"
     return k , partition_vec, H, error
+
+
+def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv):
+    V = evecs[:,:k]
+    if mode == 'DCSBM':
+        X = preprocessing.normalize(V, axis=1, norm='l2')
+        
+    elif mode == 'SBM':
+        X = Dtau_sqrt_inv* V
+        
+    else:
+        error('something went wrong. Please specify valid mode')
+        
+    clust = KMeans(n_clusters = k)
+    clust.fit(X)
+    partition_vec = clust.labels_
+    partition_vec = relabel_partition_vec(partition_vec)
+    H = create_partition_matrix_from_vector(partition_vec)
+    
+    if mode == 'DCSBM':
+        Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
+        H = Dtau_sqrt.dot(H)
+    
+    # normalize column norm to 1 of the partition indicator matrices
+    H = preprocessing.normalize(H,axis=0,norm='l2')
+    proj1 = project_orthogonal_to(H,V)
+    proj2 = project_orthogonal_to(V,H)
+
+    if norm == 'F':
+        norm1 = scipy.linalg.norm(proj1)
+        norm2 = scipy.linalg.norm(proj2)
+        error = 0.5*(norm1+norm2)/np.sqrt(k)
+    elif norm == '2':
+        norm1 = scipy.linalg.norm(proj1,2)
+        norm2 = scipy.linalg.norm(proj2,2)
+        error = .5*(norm1+norm2)
+    
+    return partition_vec, H, error
+    
+def construct_normalised_Laplacian(Omega, reg):
+    if reg:
+        # set tau to average degree
+        tau = Omega.sum()/Omega.shape[0]
+    else:
+        tau = 0
+
+    # construct normalised Laplacian
+    Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(Omega.sum(1)).flatten() + tau,-.5),0)
+    # print Omega
+    L = Dtau_sqrt_inv.dot(Omega)
+    L = Dtau_sqrt_inv.dot(L.T).T
+    L = (L+L.T)/2
+    
+    return L, Dtau_sqrt_inv
+    
+
+
+def bootstrap_null_projection_error(Omega,k,reg,norm,mode,nsamples=200):
+    
+    if reg:
+        # set tau to average degree
+        tau = Omega.sum()/Omega.shape[0]
+    else:
+        tau = 0
+    
+    print "Start bootrap"
+    
+    error_dist = np.empty(nsamples)
+    for i in xrange(nsamples):
+        #sample new omega
+        Omega_null = np.random.multinomial(Omega.sum(),np.ones(Omega.size)/Omega.size).reshape(Omega.shape)
+        
+        L, Dtau_sqrt_inv = construct_normalised_Laplacian(Omega, reg)
+
+        ev, evecs = scipy.linalg.eigh(L)
+        index = np.argsort(np.abs(ev))
+        evecs = evecs[:,index[::-1]]
+
+        error_dist[i] = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)[2]
+        stdout.write("Bootstrapping... %i%% Complete \r" % ((i+1)*100/nsamples))
+        stdout.flush()
+    
+    return error_dist
 
 
 
@@ -645,7 +689,7 @@ def orthogonalizeQR_randomized(EV,gamma=4):
     elements = np.arange(n)
     prob = (EV.T**2).sum(axis=0)
     probabilites = prob / prob.sum()
-    elements = scipy.random.choice(elements, count, p=probabilities)
+    elements = np.random.choice(elements, count, p=probabilities)   #changed to np.random (since scipy.random is not a real module)
     ellemens = scipy.unique(elements)
 
 
@@ -792,7 +836,8 @@ def expand_partitions_to_full_graph(pvecs):
     # the fines partition is already at the required size
     pvec_new = []
     pvec_new.append(pvecs[0])
-
+    
+    
     # loop over all other partition
     for i in xrange(len(pvecs)-1):
         # get the partition from the previous level
@@ -806,5 +851,5 @@ def expand_partitions_to_full_graph(pvecs):
         # previous node
         partition = p_agg_this_level[p_full_prev_level]
         pvec_new.append(partition)
-
+        
     return pvec_new

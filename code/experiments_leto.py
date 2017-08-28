@@ -4,7 +4,7 @@ from GHRGmodel import GHRG
 import GHRGmodel
 import GHRGbuild
 import spectral_algorithms as spectral
-import inference
+#~ import inference
 import metrics
 from matplotlib import pyplot as plt
 #~ import partialpooling as ppool
@@ -18,7 +18,6 @@ import sample_networks
 import networkx as nx
 import scipy.sparse as sparse
 from scipy.stats import norm
-
 
 
 def test_overlap(snr=0.5,c_bar=5):
@@ -38,6 +37,28 @@ def test_overlap(snr=0.5,c_bar=5):
     
     return metrics.calculate_level_comparison_matrix(pvec_inf,pvec)
     
+########## BOOTSTRAP TEST ################
+
+def boot():
+    #params
+    n=999
+    snr=10
+    c_bar=20
+    n_levels=3
+    groups_per_level=3
+    
+    #generate
+    D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
+    G=D_actual.generateNetworkExactProb()
+    A=D_actual.to_scipy_sparse_matrix(G)
+    
+    D=GHRGmodel.GHRG()
+    D.infer_spectral_partition_hier(A,thresh_method='bootstrap')
+    pvec = D.get_partition_all()
+    print [len(np.unique(p)) for p in pvec]
+    return pvec
+
+
 
 ########## ZOOM TEST ################
 

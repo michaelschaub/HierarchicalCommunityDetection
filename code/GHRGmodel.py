@@ -43,7 +43,7 @@ If the node is not a leaf node in D, then the diagonal entry in Nr / Er should b
 
 """
 
-
+#### WHERE IS TJHE INIT FUNCTION GONE!!!!!!!!!!!!!!!!!!!
 class GHRG(nx.DiGraph):
 
     ##
@@ -395,7 +395,7 @@ class GHRG(nx.DiGraph):
             self.node[n]['Er'] = Emat[i,i]
             self.node[n]['Nr'] = Nmat[i,i]
 
-    def infer_spectral_partition_hier(self, A):
+    def infer_spectral_partition_hier(self, A, thresh_method='analytic'):
         """ Recursively split graph into pieces by employing a spectral clustering strategy.
 
         Inputs: A          -- input adjacency matrix
@@ -409,7 +409,7 @@ class GHRG(nx.DiGraph):
         # PART (A)
         # partition go from finest partition_hier[0] to coarsest partition_hier[-1]
         nr_nodes = A.shape[0]
-        partition_hier, partition_hier_compressed = spectral.hier_spectral_partition(A)
+        partition_hier, partition_hier_compressed = spectral.hier_spectral_partition(A, thresh_method=thresh_method)
 
         self.network_nodes = np.arange(nr_nodes)
         # directed here means that the represented network is directed, the dendrogram
