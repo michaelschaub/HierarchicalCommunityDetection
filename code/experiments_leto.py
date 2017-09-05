@@ -39,13 +39,13 @@ def test_overlap(snr=0.5,c_bar=5):
     
 ########## BOOTSTRAP TEST ################
 
-def boot():
+def boot(groups_per_level=2):
     #params
     n=999
     snr=10
     c_bar=20
     n_levels=3
-    groups_per_level=3
+    
     
     #generate
     D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)

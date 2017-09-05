@@ -43,7 +43,7 @@ If the node is not a leaf node in D, then the diagonal entry in Nr / Er should b
 
 """
 
-#### WHERE IS TJHE INIT FUNCTION GONE!!!!!!!!!!!!!!!!!!!
+#### LP: WHERE IS TJHE INIT FUNCTION GONE!!!!!!!!!!!!!!!!!!!
 class GHRG(nx.DiGraph):
 
     ##
