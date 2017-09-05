@@ -110,6 +110,8 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap",thresh_method='
             pass
         if partition is not None:
             pvec.append(partition)
+        
+        print '\n\n\n LEVELS \n', len(pvec), '\n\n\n'
 
     return pvec
 
