@@ -1,7 +1,6 @@
 from GHRGmodel import GHRG
 import GHRGbuild
 import spectral_algorithms as spectral
-import inference
 import metrics
 import numpy as np
 import scipy
@@ -18,6 +17,35 @@ np.set_printoptions(precision=4,linewidth=200)
 # %autoreload 2
 # %pylab
 # import experiments_michael
+
+def test_BHwithQR():
+    n_nodes = 2**10
+    n_groups = 8
+    av_degree = 20
+    n_levels =1
+    SNR = 2
+    a, b = GHRGbuild.calculateDegreesFromAvDegAndSNR(SNR,av_degree,n_groups)
+    D_gen=GHRGbuild.create2paramGHRG(n_nodes,SNR,av_degree,n_levels,n_groups)
+    partition_true = D_gen.get_partition_at_level(1)[0]
+    G= D_gen.generateNetworkExactProb()
+    A= D_gen.to_scipy_sparse_matrix(G)
+
+    pvec = spectral.cluster_with_BetheHessian(A,num_groups=n_groups,mode='unweighted',
+                                     regularizer='BHa',clustermode='qr')
+    ol_score = metrics.overlap_score(pvec,partition_true)
+    print ol_score
+
+    pvec2= spectral.cluster_with_BetheHessian(A,num_groups=n_groups,mode='unweighted',
+                                     regularizer='BHa',clustermode='kmeans')
+    ol_score2 = metrics.overlap_score(pvec2,partition_true)
+    print pvec2
+    print ol_score2
+
+    pvec3, _ = spectral.regularized_laplacian_spectral_clustering(A,num_groups=n_groups)
+    ol_score3 = metrics.overlap_score(pvec3,partition_true)
+    print ol_score3
+
+
 
 def test_GHRG_hier(groups_per_level=4):
     # mean degree and number of nodes etc.

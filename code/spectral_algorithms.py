@@ -13,7 +13,7 @@ from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
 import scipy.linalg
 from sys import stdout
-#~ import scipy.random      ### LP: NO SUCH MODULE!?  
+#~ import scipy.random      ### LP: NO SUCH MODULE!?
 
 
 ### LP: TREATS DIRECTED AND UNDIRECTED THE SAME -- IS THIS CORRECT?
@@ -36,7 +36,7 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
     # print pvec_agg
     # print "\n\n"
     pvec_tot = expand_partitions_to_full_graph(pvec_agg)
-    
+
     return pvec_tot, pvec_agg
 
 
@@ -110,7 +110,7 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap",thresh_method='
             pass
         if partition is not None:
             pvec.append(partition)
-        
+
         print '\n\n\n LEVELS \n', len(pvec), '\n\n\n'
 
     return pvec
@@ -157,7 +157,8 @@ def spectral_partition(A, mode='Lap', num_groups=2, regularizer='BHa'):
 # REGULARIZED SPECTRAL CLUSTERING (ROHE)
 ##########################################
 
-def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
+def regularized_laplacian_spectral_clustering(A, num_groups=2,
+                                              tau=-1,clustermode='kmeans'):
     """
     Performs regularized spectral clustering based on Qin-Rohe 2013 using a normalized and
     regularized adjacency matrix (called Laplacian by Rohe et al)
@@ -178,11 +179,15 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1):
     # compute eigenvalues and eigenvectors (sorted according to magnitude first)
     ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='LM')
 
-    X = preprocessing.normalize(evecs, axis=1, norm='l2')
+    if clustermode == 'kmeans':
+        X = preprocessing.normalize(evecs, axis=1, norm='l2')
 
-    clust = KMeans(n_clusters = num_groups)
-    clust.fit(X)
-    partition_vector = clust.labels_
+        clust = KMeans(n_clusters = num_groups)
+        clust.fit(X)
+        partition_vector = clust.labels_
+    elif clustermode == 'qr':
+        #TODO: normalize EV?
+        partition_vector = clusterEVwithQR(evecs)
 
 
     return partition_vector, evecs
@@ -231,7 +236,8 @@ def build_weighted_BetheHessian(A,r):
     return BHw
 
 
-def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighted'):
+def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
+                              mode='weighted',clustermode='kmeans'):
     """
     Perform one round of spectral clustering using the Bethe Hessian
     """
@@ -246,16 +252,12 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
         r = np.sum(d*d)/np.sum(d) - 1
         r = np.sqrt(r)
 
-    # construct both the positive and the negative variant of the BH
-    if not all(A.sum(axis=1)):
-        # print "GRAPH CONTAINS NODES WITH DEGREE ZERO"
-        pass
-
     if all(A.sum(axis=1) == 0):
         # print "empty Graph -- return all in one partition"
         partition_vector = np.zeros(A.shape[0],dtype='int')
         return partition_vector
 
+    # construct both the positive and the negative variant of the BH
     if mode == 'unweighted':
         BH_pos = build_BetheHessian(A,r)
         BH_neg = build_BetheHessian(A,-r)
@@ -294,12 +296,17 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
         ev_all = np.hstack([ev_pos, ev_neg])
         index = np.argsort(ev_all)
         X = np.hstack([evecs_pos,evecs_neg])
-        X = X[:,index]
+        X = X[:,index[:len(index)/2]]
 
 
-    clust = KMeans(n_clusters = num_groups)
-    clust.fit(X)
-    partition_vector = clust.labels_
+    if clustermode == 'kmeans':
+        clust = KMeans(n_clusters = num_groups)
+        clust.fit(X)
+        partition_vector = clust.labels_
+    elif clustermode == 'qr':
+        partition_vector = clusterEVwithQR(X)
+    else:
+        print "Something went wrong -- provide valid clustermode"
 
 
     return partition_vector
@@ -485,17 +492,17 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 ##################################################
 
 def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F',method='analytic'):
-    
+
     #TODO: we might want to adjust this later on
     thres = 0.05
-    
+
     if method=='bootstrap':
         norm='2'
         thres=0.005
-    
+
     max_k = Omega.shape[0]
-    
-    
+
+
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(Omega, reg)
     if reg:
         # set tau to average degree
@@ -514,7 +521,7 @@ def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F',m
     for k in xrange(max_k-1,1,-1):
         partition_vec, H = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
         error = calculate_proj_error(evecs, H, norm)
-        
+
         if method=='analytic':
             print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
             print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
@@ -546,28 +553,28 @@ def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv):
     V = evecs[:,:k]
     if mode == 'DCSBM':
         X = preprocessing.normalize(V, axis=1, norm='l2')
-        
+
     elif mode == 'SBM':
         X = Dtau_sqrt_inv* V
-        
+
     else:
         error('something went wrong. Please specify valid mode')
-        
+
     clust = KMeans(n_clusters = k)
     clust.fit(X)
     partition_vec = clust.labels_
     partition_vec = relabel_partition_vec(partition_vec)
     H = create_partition_matrix_from_vector(partition_vec)
-    
+
     if mode == 'DCSBM':
         Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
         H = Dtau_sqrt.dot(H)
-    
+
     # normalize column norm to 1 of the partition indicator matrices
     H = preprocessing.normalize(H,axis=0,norm='l2')
-    
+
     return partition_vec, H
-    
+
 def calculate_proj_error(evecs,H,norm):
     k = np.shape(H)[1]
     V = evecs[:,:k]
@@ -582,15 +589,15 @@ def calculate_proj_error(evecs,H,norm):
         norm1 = scipy.linalg.norm(proj1,2)
         norm2 = scipy.linalg.norm(proj2,2)
         error = .5*(norm1+norm2)
-    
+
     #~ print 'H\n',H.A
     #~ print 'V\n',V
     #~ print proj1
     #~ print norm1,norm2,error
     #~ print '\n\n\n\n'
-    
+
     return error
-    
+
 def construct_normalised_Laplacian(Omega, reg):
     if reg:
         # set tau to average degree
@@ -604,54 +611,54 @@ def construct_normalised_Laplacian(Omega, reg):
     L = Dtau_sqrt_inv.dot(Omega)
     L = Dtau_sqrt_inv.dot(L.T).T
     L = (L+L.T)/2
-    
+
     return L, Dtau_sqrt_inv
-    
+
 
 # things to try:
 # - project true evecs onto random partitions
 # - maintain original dims?
 
 def bootstrap_null_projection_error(evecs, pvec, Omega,k,reg,norm,mode,nsamples=1000):
-    
+
     partition_vec = pvec.copy()
-    
+
     if reg:
         # set tau to average degree
         tau = Omega.sum()/Omega.shape[0]
     else:
         tau = 0
-    
+
     print "Start bootrap"
-    
+
     error_dist = np.empty(nsamples)
     for i in xrange(nsamples):
-        
+
         #~ partition_vec = np.random.randint(0,k,size=evecs.shape[0])
         np.random.shuffle(partition_vec)
         partition_vec = relabel_partition_vec(partition_vec)
         H = create_partition_matrix_from_vector(partition_vec)
         H = preprocessing.normalize(H,axis=0,norm='l2')
-        
+
 
         #~ error_dist[i] = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)[2]
         error_dist[i] = calculate_proj_error(evecs,H,norm)
         stdout.write("Bootstrapping... %i%% Complete \r" % ((i+1)*100/nsamples))
         stdout.flush()
-    
+
     return error_dist
 
 
 def bootstrap_null_projection_error_old(H,Omega,k,reg,norm,mode,nsamples=1000):
-    
+
     if reg:
         # set tau to average degree
         tau = Omega.sum()/Omega.shape[0]
     else:
         tau = 0
-    
+
     print "Start bootrap"
-    
+
     error_dist = np.empty(nsamples)
     for i in xrange(nsamples):
         #sample new omega
@@ -662,21 +669,21 @@ def bootstrap_null_projection_error_old(H,Omega,k,reg,norm,mode,nsamples=1000):
         Omega_null[idx] = np.random.multinomial(Omega[idx].sum()-np.diag(Omega).sum()/2,np.ones(Omega[idx].size)/Omega[idx].size)
         #~ Omega_null[idx] = np.random.multinomial(Omega[idx].sum(),np.ones(Omega[idx].size)/Omega[idx].size)
         #~ Omega_null[idx] = np.random.multinomial(Omega[idx].sum(),Omega[idx]/Omega[idx].sum())
-        
+
         Omega_null+=Omega_null.T
-        
+
         assert Omega.sum()==Omega_null.sum()
-        
+
         #~ print Omega
         #~ print Omega_null
         #~ print Omega.sum(), Omega_null.sum(),asdasd
-        
+
         #~ Omega_null = np.random.multinomial(Omega.sum(),np.ones(Omega.size)/Omega.size).reshape(Omega.shape)
         #~ Omega_null=np.float64(Omega_null)
         #~ Omega_null/=2
         #~ Omega_null+=Omega_null.T
         #~ Omega_null=np.int32(Omega_null)
-        
+
         L, Dtau_sqrt_inv = construct_normalised_Laplacian(Omega_null, reg)
 
         ev, evecs = scipy.linalg.eigh(L)
@@ -687,7 +694,7 @@ def bootstrap_null_projection_error_old(H,Omega,k,reg,norm,mode,nsamples=1000):
         error_dist[i] = calculate_proj_error(evecs,H,norm)
         stdout.write("Bootstrapping... %i%% Complete \r" % ((i+1)*100/nsamples))
         stdout.flush()
-    
+
     return error_dist
 
 
@@ -727,7 +734,7 @@ def clusterEVwithQR(EV, randomized=False, gamma=4):
     else:
         Z, Q = orthogonalizeQR(EV)
 
-    cluster_ = scipy.absolute(Z).argmax(axis=0)
+    cluster_ = scipy.absolute(Z).argmax(axis=1)
 
     return cluster_
 
@@ -747,7 +754,9 @@ def orthogonalizeQR(EV):
     # polar decomposition to find nearest orthogonal matrix
     U, S, V = scipy.linalg.svd(EV[P,:].T,full_matrices=False)
 
-    Z = EV.dot(U.dot(V.T))
+    #TODO: check this part!
+    # Z = EV.dot(U.dot(V.T))
+    Z = EV.dot(EV[P,:].T)
 
     return Z, Q
 
@@ -766,7 +775,7 @@ def orthogonalizeQR_randomized(EV,gamma=4):
     count = scipy.minimum(scipy.ceil(gamma*k*scipy.log(k)),n)
     elements = np.arange(n)
     prob = (EV.T**2).sum(axis=0)
-    probabilites = prob / prob.sum()
+    probabilities = prob / prob.sum()
     elements = np.random.choice(elements, count, p=probabilities)   #changed to np.random (since scipy.random is not a real module)
     ellemens = scipy.unique(elements)
 
@@ -914,8 +923,8 @@ def expand_partitions_to_full_graph(pvecs):
     # the fines partition is already at the required size
     pvec_new = []
     pvec_new.append(pvecs[0])
-    
-    
+
+
     # loop over all other partition
     for i in xrange(len(pvecs)-1):
         # get the partition from the previous level
@@ -929,5 +938,5 @@ def expand_partitions_to_full_graph(pvecs):
         # previous node
         partition = p_agg_this_level[p_full_prev_level]
         pvec_new.append(partition)
-        
+
     return pvec_new

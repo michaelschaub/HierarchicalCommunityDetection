@@ -8,8 +8,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 import graph_tool as gt
 from graph_tool import inference
+from timeit import default_timer as timer
 
-def run_algorithm_comparison(n_nodes=2**12):
+
+def run_algorithm_comparison(n_nodes=2**9,n_groups=32, av_degree=20, filename='fixed_k.pdf'):
 
     # loop over particular SNR regime setup
     log_SNR_min = -0.5
@@ -18,15 +20,16 @@ def run_algorithm_comparison(n_nodes=2**12):
     SNR = 10**np.arange(log_SNR_min,log_SNR_max+log_SNR_step,log_SNR_step)
 
     # some further statistics for the network, we have just one hier. level here
-    av_degree = 20
     n_samples = 20
     n_levels = 1
-    n_groups = 32
 
     # preallocate results
     overlap_Bethe = np.zeros((SNR.size,n_samples))
     overlap_Rohe = np.zeros((SNR.size,n_samples))
     overlap_Tiago = np.zeros((SNR.size,n_samples))
+    time_Bethe = np.zeros((SNR.size,n_samples))
+    time_Rohe = np.zeros((SNR.size,n_samples))
+    time_Tiago = np.zeros((SNR.size,n_samples))
 
     for ii, snr in enumerate(SNR):
 
@@ -40,34 +43,47 @@ def run_algorithm_comparison(n_nodes=2**12):
             G= D_gen.generateNetworkExactProb()
             A= D_gen.to_scipy_sparse_matrix(G)
             GT_graph = gt.Graph()
-            #TODO: double check the creation of the GT graphs is correct
             GT_graph.add_edge_list(scipy.transpose(A.nonzero()))
 
             # Spectral Techniques
+            start = timer()
             pvec = spectral.spectral_partition(A,'Bethe',n_groups)
+            end = timer()
             ol_score = metrics.overlap_score(pvec,partition_true)
             overlap_Bethe[ii,jj] = ol_score
-            print "1"
+            time_Bethe[ii,jj] = start-end
+            print "Bethe done"
 
+            start = timer()
             pvec = spectral.spectral_partition(A,'Lap',n_groups)
+            end = timer()
             ol_score = metrics.overlap_score(pvec,partition_true)
             overlap_Rohe[ii,jj] = ol_score
-            print "2"
+            time_Rohe[ii,jj] = start-end
+            print "reg. Laplacian done"
 
             # Inference based on Tiago
+            start = timer()
             blockmodel_state = gt.inference.minimize_blockmodel_dl(GT_graph,
                                                                    B_min=n_groups,
                                                                    B_max=n_groups,
                                                                    deg_corr=False)
+            end = timer()
             pvec = blockmodel_state.get_blocks().get_array()
             ol_score = metrics.overlap_score(pvec,partition_true)
             overlap_Tiago[ii,jj] = ol_score
-            print "3"
+            time_Tiago[ii,jj] = start-end
+            print "Tiago done"
 
 
 
     plot_results_overlap(SNR, overlap_Bethe, overlap_Rohe, overlap_Tiago)
-    plt.savefig('fixed_k.pdf', bbox_inches='tight')
+    plt.savefig(filename+'.pdf', bbox_inches='tight')
+
+    np.savez(filename,overlap_Rohe=overlap_Rohe,overlap_Bethe=overlap_Bethe,
+              overlap_Tiago=overlap_Tiago,time_Bethe=time_Bethe,time_Rohe=time_Rohe,
+             time_Tiago=time_Tiago)
+
 
 def plot_results_overlap(SNR,overlap_Bethe,overlap_Rohe,overlap_Tiago):
     plt.figure()
@@ -78,3 +94,14 @@ def plot_results_overlap(SNR,overlap_Bethe,overlap_Rohe,overlap_Tiago):
     plt.xlabel("SNR")
     plt.ylabel("overlap score")
     plt.show()
+
+def loop_over_algorithm_comparison():
+    for av_degree in [10, 20]:
+        for n_groups in [32, 64]:
+            for n in [2**x for x in [10,12,14]]:
+                filename = 'FlatClustering'+ '_av' + str(av_degree) + '_ngroups' \
+                           + str(n_groups) + '_n' + str(n)
+                run_algorithm_comparison(n,n_groups,av_degree,filename)
+
+def load_results_and_plot():
+    pass
