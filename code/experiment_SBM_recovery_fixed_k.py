@@ -11,7 +11,7 @@ from graph_tool import inference
 from timeit import default_timer as timer
 
 
-def run_algorithm_comparison(n_nodes=2**9,n_groups=32, av_degree=20, filename='fixed_k.pdf'):
+def run_algorithm_comparison(n_nodes=2**9,n_groups=32, av_degree=20, filename='fixed_k'):
 
     # loop over particular SNR regime setup
     log_SNR_min = -0.5
@@ -93,7 +93,7 @@ def plot_results_overlap(SNR,overlap_Bethe,overlap_Rohe,overlap_Tiago):
     plt.legend(loc=4)
     plt.xlabel("SNR")
     plt.ylabel("overlap score")
-    plt.show()
+    # plt.show()
 
 def loop_over_algorithm_comparison():
     for av_degree in [10, 20]:

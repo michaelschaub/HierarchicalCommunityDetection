@@ -296,7 +296,7 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
         ev_all = np.hstack([ev_pos, ev_neg])
         index = np.argsort(ev_all)
         X = np.hstack([evecs_pos,evecs_neg])
-        X = X[:,index[:len(index)/2]]
+        X = X[:,index[:num_groups]]
 
 
     if clustermode == 'kmeans':
