@@ -95,6 +95,8 @@ def test_agglomeration_ideas(groups_per_level=3):
 
     reg= False
     L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Aagg,reg)
+    # D = scipy.sparse.diags(np.array(Aagg.sum(1)).flatten(),0)
+    # L = D - Aagg
     # plt.figure()
     # plt.imshow(L,interpolation='none')
     if reg:
@@ -106,6 +108,9 @@ def test_agglomeration_ideas(groups_per_level=3):
     ev, evecs = scipy.linalg.eigh(L)
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
+    # evecs = evecs[:,index]
+    plt.figure()
+    plt.plot(ev[index])
 
     max_k = np.max(p0)+1
     norm = 'F'
