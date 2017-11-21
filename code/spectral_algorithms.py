@@ -23,15 +23,8 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
     # initial spectral clustering, performed according to method 'first pass'
     p0 = spectral_partition(A,mode=first_pass,num_groups=-1)
 
-    # try to refine this partition as much as possible
-    # pvec_zoom = hier_spectral_partition_zoom_in(A,p0,mode=method_zoom)
-    pvec_zoom = p0
-    # print "ZOOM RESULTS:"
-    # print pvec_zoom
-    # print "\n\n"
-
     # agglomerate builds list of all partitions
-    pvec_agg = hier_spectral_partition_agglomerate(A,pvec_zoom, mode=method_agg,thresh_method=thresh_method)
+    pvec_agg = hier_spectral_partition_agglomerate(A,p0, mode=method_agg,thresh_method=thresh_method)
     # print "Aggregation RESULTS:"
     # print pvec_agg
     # print "\n\n"
@@ -105,7 +98,8 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap",thresh_method='
         # print "Aggregated network:"
         # print links_between_groups
         if mode == "Lap":
-            k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups,method=thresh_method)
+            k, partition, H, error = identify_hierarchy(links_between_groups,method=thresh_method)
+            #~ k, partition, H, error = identify_hierarchy_in_affinity_matrix(links_between_groups,method=thresh_method)
         else:
             pass
         if partition is not None:
@@ -491,6 +485,61 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
+def identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic', threshold=0):
+    
+    ## first construct Laplacian and find eigenvectors
+    #TODO: this is not a Laplacian but the normalized adjacency of Rohe et al..
+    L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
+    if reg:
+        # set tau to average degree
+        tau = A.sum()/A.shape[0]
+    else:
+        tau = 0
+
+    ## input A may be a sparse scipy matrix or dense format numpy 2d array.
+    try:
+        ev, evecs = scipy.linalg.eigh(L)
+    except ValueError:
+        ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='LM')
+    index = np.argsort(np.abs(ev))
+    evecs = evecs[:,index[::-1]]
+    print "START AGGLOMERATION PHASE"
+    
+    prev_partition_vec, prev_H = find_partition(evecs, max_k, tau, norm, mode, Dtau_sqrt_inv)
+    prev_error = calculate_proj_error(evecs, prev_H, norm)
+    errors = [(max_k,prev_error)]
+    
+    for k in xrange(max_k-1,1,-1):
+        partition_vec, H = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
+        error = calculate_proj_error(evecs, H, norm)
+        errors.append((k,error))
+        test_statistic = error - prev_error
+        #~ print prev_H.T.dot(H).todense()
+        
+        if method=='analytic':
+            #~ print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
+            #~ print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
+            # Note that this should always be fulfilled at k=1
+            if error/ np.sqrt(max_k)  < threshold:
+                print "Agglomerated into " + str(k) + " groups \n\n"
+                return k, partition_vec, H, error
+        else:
+            error('something went wrong. Please specify valid mode')
+        
+        prev_partition_vec = partition_vec
+        prev_error = error
+        prev_H = H
+
+    partition_vec = None
+    H = -1
+    k = 0
+    error = -1
+    print "Final agglomeration -- no \n"
+    return k , partition_vec, H, errors
+    
+
+
+#Possibly deprecated
 def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F',method='analytic'):
 
     #TODO: we might want to adjust this later on
@@ -613,89 +662,6 @@ def construct_normalised_Laplacian(Omega, reg):
     L = (L+L.T)/2
 
     return L, Dtau_sqrt_inv
-
-
-# things to try:
-# - project true evecs onto random partitions
-# - maintain original dims?
-
-def bootstrap_null_projection_error(evecs, pvec, Omega,k,reg,norm,mode,nsamples=1000):
-
-    partition_vec = pvec.copy()
-
-    if reg:
-        # set tau to average degree
-        tau = Omega.sum()/Omega.shape[0]
-    else:
-        tau = 0
-
-    print "Start bootrap"
-
-    error_dist = np.empty(nsamples)
-    for i in xrange(nsamples):
-
-        #~ partition_vec = np.random.randint(0,k,size=evecs.shape[0])
-        np.random.shuffle(partition_vec)
-        partition_vec = relabel_partition_vec(partition_vec)
-        H = create_partition_matrix_from_vector(partition_vec)
-        H = preprocessing.normalize(H,axis=0,norm='l2')
-
-
-        #~ error_dist[i] = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)[2]
-        error_dist[i] = calculate_proj_error(evecs,H,norm)
-        stdout.write("Bootstrapping... %i%% Complete \r" % ((i+1)*100/nsamples))
-        stdout.flush()
-
-    return error_dist
-
-
-def bootstrap_null_projection_error_old(H,Omega,k,reg,norm,mode,nsamples=1000):
-
-    if reg:
-        # set tau to average degree
-        tau = Omega.sum()/Omega.shape[0]
-    else:
-        tau = 0
-
-    print "Start bootrap"
-
-    error_dist = np.empty(nsamples)
-    for i in xrange(nsamples):
-        #sample new omega
-        #~ idx = np.triu_indices(Omega.shape[0],1)
-        idx = np.triu_indices(Omega.shape[0])
-        Omega_null = np.zeros(Omega.shape)
-        #~ Omega_null = np.diag(np.diag(Omega))/2
-        Omega_null[idx] = np.random.multinomial(Omega[idx].sum()-np.diag(Omega).sum()/2,np.ones(Omega[idx].size)/Omega[idx].size)
-        #~ Omega_null[idx] = np.random.multinomial(Omega[idx].sum(),np.ones(Omega[idx].size)/Omega[idx].size)
-        #~ Omega_null[idx] = np.random.multinomial(Omega[idx].sum(),Omega[idx]/Omega[idx].sum())
-
-        Omega_null+=Omega_null.T
-
-        assert Omega.sum()==Omega_null.sum()
-
-        #~ print Omega
-        #~ print Omega_null
-        #~ print Omega.sum(), Omega_null.sum(),asdasd
-
-        #~ Omega_null = np.random.multinomial(Omega.sum(),np.ones(Omega.size)/Omega.size).reshape(Omega.shape)
-        #~ Omega_null=np.float64(Omega_null)
-        #~ Omega_null/=2
-        #~ Omega_null+=Omega_null.T
-        #~ Omega_null=np.int32(Omega_null)
-
-        L, Dtau_sqrt_inv = construct_normalised_Laplacian(Omega_null, reg)
-
-        ev, evecs = scipy.linalg.eigh(L)
-        index = np.argsort(np.abs(ev))
-        evecs = evecs[:,index[::-1]]
-
-        #~ error_dist[i] = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)[2]
-        error_dist[i] = calculate_proj_error(evecs,H,norm)
-        stdout.write("Bootstrapping... %i%% Complete \r" % ((i+1)*100/nsamples))
-        stdout.flush()
-
-    return error_dist
 
 
 

@@ -37,27 +37,161 @@ def test_overlap(snr=0.5,c_bar=5):
     
     return metrics.calculate_level_comparison_matrix(pvec_inf,pvec)
     
-########## BOOTSTRAP TEST ################
+########## Model Select TEST ################
 
-def boot(groups_per_level=2):
+def boot(groups_per_level=3,n_levels=3,snr=20):
     #params
-    n=999
-    snr=10
-    c_bar=20
-    n_levels=3
+    n=10000
     
+    c_bar=30
     
-    #generate
+    max_k=30
+    
+    plt.figure()
+    mean_err=0
+    for i in xrange(20):
+        print "I",i
+        #generate
+        D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
+        G=D_actual.generateNetworkExactProb()
+        A=D_actual.to_scipy_sparse_matrix(G)
+        k , partition_vec, H, errors = spectral.identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic', threshold=0)
+        
+        
+        #D=GHRGmodel.GHRG()
+        #D.infer_spectral_partition_hier(A,thresh_method='bootstrap')
+        #~ D.infer_spectral_partition_hier(A,thresh_method='ttest')
+        #pvec = D.get_partition_all()
+        #~ print [len(np.unique(p)) for p in pvec]
+        
+        Ks,errs= zip(*errors)
+        Ks=np.array(Ks)
+        errs=np.array(errs)
+        mean_err+=errs
+    
+        plt.plot(Ks,errs)
+    
+    plt.plot(Ks,mean_err/(i+1),'k',lw=3)
+    
+    #~ plt.plot(Ks,n*Ks-Ks**2,'k:')
+    #~ plt.plot(Ks[1:],errs[1:]-errs[:-1])
+    #~ errs/=np.power(Ks,1/2)
+    #~ plt.plot(Ks[1:],errs[1:]-errs[:-1])
+    #~ plt.axhline(0,color='k',ls=':')
+    
+    return partition_vec, errors
+
+# also plot variance
+# use k=27 as a threshold
+def noise(groups_per_level=3,n_levels=3,snr=20,plot=True, max_k=30):
+    #params
+    n=10000
+    
+    c_bar=30
+    
+    #~ max_k=30 #groups_per_level**n_levels+3
+    
     D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
     G=D_actual.generateNetworkExactProb()
     A=D_actual.to_scipy_sparse_matrix(G)
     
-    D=GHRGmodel.GHRG()
-    D.infer_spectral_partition_hier(A,thresh_method='bootstrap')
-    pvec = D.get_partition_all()
-    print [len(np.unique(p)) for p in pvec]
-    return pvec
+    reps=10
+    all_errors=np.empty((max_k-1,reps))
+    
+    for mag in [1e-1]:
+        if plot:
+            plt.figure()
+        mean_err=0
+        for i in xrange(reps):
+            print "I",i
+            #generate noise
+            
+            rvs = norm(0, mag).rvs
+            
+            nnoise=sparse.random(n,n,5e-3,data_rvs=rvs)
+            print nnoise.sum(), nnoise.astype('bool').sum(), "nnoise elements added", n*n
+            A_noisy=A+nnoise
+            
+            k , partition_vec, H, errors = spectral.identify_hierarchy(A_noisy,max_k,mode='SBM',reg=False, norm='F',method='analytic', threshold=0)
+            
+            Ks,errs= zip(*errors)
+            Ks=np.array(Ks)
+            errs=np.array(errs)
+            all_errors[:,i] = errs
+            mean_err+=errs
+            
+            if plot:
+                plt.plot(Ks,errs)
+        
+        if plot:
+            plt.plot(Ks,mean_err/(i+1),'k',lw=3)
+        
+        k , partition_vec, H, errors = spectral.identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic', threshold=0)
+            
+        Ks,errs= zip(*errors)
+        Ks=np.array(Ks)
+        errs=np.array(errs)
+        mean_err/=reps
+        
+        if plot:
+            plt.figure()
+            plt.plot(Ks[1:],errs[1:]-errs[:-1],'m')
+            plt.plot(Ks[1:],mean_err[1:]-mean_err[:-1],'b')
+            plt.axhline(0,color='k',ls=':')
+            plt.figure()
+            errs/=np.power(Ks,1/2)
+            mean_err/=np.power(Ks,1/2)
+            plt.plot(Ks[1:],errs[1:]-errs[:-1],'m')
+            plt.plot(Ks[1:],mean_err[1:]-mean_err[:-1],'b')
+            plt.axhline(0,color='k',ls=':')
+        
+        #~ plt.figure()
+        #~ plt.plot(Ks[1:],mean_err[1:]-mean_err[:-1])
+        #~ plt.axhline(0,color='k',ls=':')
+        #~ plt.figure()
+        #~ mean_err/=np.power(Ks,1/2)
+        #~ plt.plot(Ks[1:],mean_err[1:]-mean_err[:-1])
+        #~ plt.axhline(0,color='k',ls=':')
+        
+            plt.figure()
+            plt.plot(Ks,np.var(all_errors,1))
+            plt.axhline(0,color='k',ls=':')
+            print np.var(all_errors,1)
+    
+    return Ks,all_errors
 
+
+def test_noise_snr(groups_per_level=3,n_levels=3):
+    reps=1
+    fig1,ax1 = plt.subplots(1,1)
+    fig2,ax2 = plt.subplots(1,1)
+    
+    max_k=28
+    #~ Ks=np.arange(max_k-1,1,-1)
+    
+    true_vec = np.zeros(max_k-1,dtype=bool)
+    true_vec[[-2,-8,-26]]=True
+    
+    for i in xrange(reps):
+        for snr in xrange(1,21,2):
+            print "SNR:",snr
+            Ks,errors=noise(groups_per_level=groups_per_level,n_levels=n_levels,snr=snr,plot=False,max_k=max_k)
+            print "Ks true",Ks[true_vec]
+            print Ks
+            mean_error=np.mean(errors,1)
+            mean_error/=np.power(Ks,1/2)
+            mean_error[1:]-=mean_error[:-1]
+            var_error=np.var(errors,1)
+            ax1.plot(np.ones(sum(true_vec==False)-1)*snr,mean_error[true_vec==False][1:],'kx')
+            ax1.plot(snr,mean_error[-2],'mo',alpha=0.5)
+            ax1.plot(snr,mean_error[-8],'ms',alpha=0.5)
+            ax1.plot(snr,mean_error[-26],'m^',alpha=0.5)
+            ax2.plot(np.ones(sum(true_vec==False)-1)*snr,var_error[true_vec==False][1:],'kx')
+            ax2.plot(snr,var_error[-2],'mo',alpha=0.5)
+            ax2.plot(snr,var_error[-8],'ms',alpha=0.5)
+            ax2.plot(snr,var_error[-26],'m^',alpha=0.5)
+            
+    
 
 
 ########## ZOOM TEST ################
