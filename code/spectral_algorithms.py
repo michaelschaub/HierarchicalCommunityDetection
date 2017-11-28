@@ -13,10 +13,7 @@ from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
 import scipy.linalg
 from sys import stdout
-#~ import scipy.random      ### LP: NO SUCH MODULE!?
 
-
-### LP: TREATS DIRECTED AND UNDIRECTED THE SAME -- IS THIS CORRECT?
 
 def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe',thresh_method='analytic'):
 
@@ -486,7 +483,7 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 ##################################################
 
 def identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic', threshold=0):
-    
+
     ## first construct Laplacian and find eigenvectors
     #TODO: this is not a Laplacian but the normalized adjacency of Rohe et al..
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
@@ -504,18 +501,18 @@ def identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic',
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
     print "START AGGLOMERATION PHASE"
-    
+
     prev_partition_vec, prev_H = find_partition(evecs, max_k, tau, norm, mode, Dtau_sqrt_inv)
     prev_error = calculate_proj_error(evecs, prev_H, norm)
     errors = [(max_k,prev_error)]
-    
+
     for k in xrange(max_k-1,1,-1):
         partition_vec, H = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
         error = calculate_proj_error(evecs, H, norm)
         errors.append((k,error))
         test_statistic = error - prev_error
         #~ print prev_H.T.dot(H).todense()
-        
+
         if method=='analytic':
             #~ print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
             #~ print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
@@ -525,7 +522,7 @@ def identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic',
                 return k, partition_vec, H, error
         else:
             error('something went wrong. Please specify valid mode')
-        
+
         prev_partition_vec = partition_vec
         prev_error = error
         prev_H = H
@@ -536,7 +533,7 @@ def identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic',
     error = -1
     print "Final agglomeration -- no \n"
     return k , partition_vec, H, errors
-    
+
 
 
 #Possibly deprecated

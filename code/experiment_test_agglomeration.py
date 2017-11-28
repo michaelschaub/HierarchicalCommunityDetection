@@ -68,7 +68,7 @@ def calculate_proj_error(evecs,H,norm):
 
 def test_agglomeration_ideas(groups_per_level=3):
     n=2700
-    snr=5
+    snr=10
     c_bar=20
     n_levels=3
 
