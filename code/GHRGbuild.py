@@ -101,3 +101,21 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
     D.setParameters(omega)
 
     return D
+
+
+def createNonSymmetric2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,combine_groups):
+    """Create a non-symmetic version of a hierarchical model.
+       Do this by first creating a balanced hierarchical model and then aggregating and
+       averaging the groups defined in the vector 'combine_groups' which refers to the
+       groups at the lowest level.
+
+       This should (approximately) preserve the detectability of the model as specified
+       via the snr in the orginal symmetric and homogeneous model.
+
+       Example:
+       Consider a hier model with 3x3 groups, and combine_groups=[[0,1,2],[3,4]].
+       This would result in a model in which the first group is now 'flat', and within
+       the second group with heterogeneous group sizes.
+    """
+    D = create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,combine_groups)
+

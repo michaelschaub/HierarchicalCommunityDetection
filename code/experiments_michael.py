@@ -50,11 +50,11 @@ def test_BHwithQR():
 def test_GHRG_hier(groups_per_level=4):
     # mean degree and number of nodes etc.
     n=1600
-    n_levels = 3
+    n_levels = 2
     K=groups_per_level**n_levels
     av_degree = 30
 
-    snr = 10
+    snr = 5
 
     a,b = GHRGbuild.calculateDegreesFromAvDegAndSNR(snr,av_degree,groups_per_level)
     D_gen=GHRGbuild.create2paramGHRG(n,snr,av_degree,n_levels,groups_per_level)
@@ -66,37 +66,6 @@ def test_GHRG_hier(groups_per_level=4):
 
     return D
 
-
-
-
-def loop_over_hierarchical_clustering(n_levels = np.array([2, 2, 2]), n= 2**14):
-
-    SNR_max = 10
-    SNR_min = 0.5
-    SNR_range = np.arange(SNR_min,SNR_max,0.25)
-    groups_per_level = n_levels
-    av_degree = 15
-    nsamples = 10
-    precision = np.zeros((nsamples,SNR_range.shape[0]))
-    recall = np.zeros((nsamples,SNR_range.shape[0]))
-    for i in np.arange(nsamples):
-         for j, SNR in enumerate(SNR_range):
-
-            print "SNR =", SNR, "\n"
-
-            # sample hier block model
-            A, pvecs_true = sample_networks.sample_hier_block_model(groups_per_level, av_deg = av_degree, nnodes=n, snr=SNR)
-
-            pvecs_inferred, _ = spectral.hier_spectral_partition(A)
-            ol_matrix = metrics.calculate_level_comparison_matrix(pvecs_inferred,pvecs_true)
-
-            p,r=metrics.calculate_precision_recall(ol_matrix)
-            precision[i,j] = p
-            recall[i,j] = r
-
-    plt.figure()
-    plt.plot(SNR_range,precision.mean(axis=0),'b-.')
-    plt.plot(SNR_range,recall.mean(axis=0),'r--')
 
 def test_spectral_algorithms_hier_agg(n_levels=4,groups_per_level=2):
     random.seed(12345)
@@ -138,41 +107,6 @@ def test_spectral_algorithms_hier_agg(n_levels=4,groups_per_level=2):
     print "Partition into "+ str(np.max(pvecs[-1])+1) +" groups"
     print "OVERLAP SCORE Coarsest: ", ol_score, "\n\n"
 
-
-    return pvecs
-
-def test_spectral_algorithms_hier_zoom(n_levels=5,groups_per_level=2):
-    random.seed(12345)
-    # mean degree number of nodes etc.
-    SNR = 3
-    n=2**13
-    K=groups_per_level**n_levels
-    ratio = 0.1
-
-    D_gen=create2paramGHRG(n,SNR,ratio,n_levels,groups_per_level)
-    G=D_gen.generateNetworkExactProb()
-    A = D_gen.to_scipy_sparse_matrix(G)
-    # plt.figure()
-    # plt.spy(A,markersize=0.5)
-
-    pvec = spectral.spectral_partition(A,'Bethe',-1)
-    # plt.figure()
-    # plt.plot(pvec,marker='s')
-
-    partition_true = D_gen.get_lowest_partition()
-    partition_high = D_gen.partition_level(0)
-
-    ol_score = metrics.overlap_score(pvec,partition_true)
-    print "Partition into "+ str(np.max(pvec)+1) +" groups"
-    print "OVERLAP SCORE (SINGLE LAYER INFERENCE): ", ol_score, "\n\n"
-
-
-    pvecs = spectral.hier_spectral_partition_zoom_in(A,pvec)
-    print pvecs
-
-    ol_score = metrics.overlap_score(pvecs,partition_true)
-    print "Partition into "+ str(np.max(pvecs)+1) +" groups"
-    print "OVERLAP SCORE Finest: ", ol_score, "\n\n"
 
     return pvecs
 
@@ -312,26 +246,3 @@ def plot_results_overlap(SNR,overlap_Bethe,overlap_Rohe,overlap_Seidel):
     plt.legend()
     plt.xlabel("SNR")
     plt.ylabel("overlap score")
-
-def run_test_ErNr_for_Leto(n_groups=2):
-    # mean degree and number of nodes etc.
-    n=1000
-    n_levels = 1
-    K=n_groups**n_levels
-    ratio = 0.5
-    snr = 8
-
-    D_gen=create2paramGHRG(n,snr,ratio,n_levels,n_groups)
-    partition_true = D_gen.get_lowest_partition()
-    G= D_gen.generateNetworkExactProb()
-    A= D_gen.to_scipy_sparse_matrix(G)
-
-    D_inferred = inference.split_network_spectral_partition(A)
-
-    for ii in range(len(D_gen.nodes())):
-        print "GENERATED"
-        print D_gen.node[ii]
-        print "INFERRED"
-        print D_inferred.node[ii]
-
-    return D_gen, D_inferred, A, partition_true

@@ -482,7 +482,10 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
-def identify_hierarchy(A,max_k,mode='SBM',reg=False, norm='F',method='analytic', threshold=0):
+def identify_hierarchy(A,max_k=-1,mode='SBM',reg=False, norm='F',method='analytic', threshold=0):
+
+    if max_k == -1:
+        max_k = A.shape[0]
 
     ## first construct Laplacian and find eigenvectors
     #TODO: this is not a Laplacian but the normalized adjacency of Rohe et al..

@@ -175,7 +175,7 @@ class GHRG(nx.DiGraph):
         """Return the partition at a specified level of the dendrogram
 
             level == 1 corresponds to coarsest (non-trivial) partition detected
-            level == -1 corresponds to finest (non-trival )partition detected
+            level == -1 corresponds to finest (non-trival) partition detected
 
         """
 

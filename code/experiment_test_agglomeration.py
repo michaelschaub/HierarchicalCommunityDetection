@@ -68,7 +68,7 @@ def calculate_proj_error(evecs,H,norm):
 
 def test_agglomeration_ideas(groups_per_level=3):
     n=2700
-    snr=10
+    snr=3
     c_bar=20
     n_levels=3
 
@@ -101,7 +101,7 @@ def test_agglomeration_ideas(groups_per_level=3):
     # plt.imshow(L,interpolation='none')
     if reg:
         # set tau to average degree
-        tau = Aagg.sum()/Aagmpog.shape[0]
+        tau = Aagg.sum()/Aagg.shape[0]
     else:
         tau = 0
 
@@ -110,7 +110,7 @@ def test_agglomeration_ideas(groups_per_level=3):
     evecs = evecs[:,index[::-1]]
     # evecs = evecs[:,index]
     plt.figure()
-    plt.plot(ev[index])
+    plt.plot(np.abs(ev[index[::-1]]))
 
     max_k = np.max(p0)+1
     norm = 'F'
