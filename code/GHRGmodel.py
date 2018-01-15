@@ -10,6 +10,11 @@ import spectral_algorithms as spectral
 GHRG base class is a networkx DiGraph that stores a dendrogram of the hierarchical model.
 The dendrogram is a directed tree with edges pointing outward from the root towards the leafs.
 
+The length to the leave nodes is always kept the same, such that every level of the
+dendrogram can be interpreted as a partition. In other words, if the hiearchy does not
+have the same depth in each (sub)-groups, we simply repeat nodes that do not split at the
+next level.
+
 In the following description the Dendrogram graph is denoted by D.
 The hierarchical graph it encodes is denoted by G.
 
@@ -20,6 +25,7 @@ D.network_nodes -- list of all nodes in G that are desribed by the dendrogram
 D.root_node     -- the root node of the dendrogram
 D.directed      -- is the underlying graph G directed? (True / False)
 D.self_loops    -- self-loops allowed in G? (True / False)
+D.leaf_nodes    -- the leaf nodes of the dendrogram
 
 
 Each node in the GHRG dendrogram graph D has the following fields.
@@ -40,6 +46,8 @@ Note that depending on whether D.directed is true or not the matrices Nr and Er 
 triangular and include #undirected links or #directed links
 
 If the node is not a leaf node in D, then the diagonal entry in Nr / Er should be 0 by convention; since the precise details of the connectivity pattern are to be read out at a lower level
+
+For the moment support for directed networks is not completely/consistently implemented.
 
 """
 
@@ -261,9 +269,24 @@ class GHRG(nx.DiGraph):
         # TODO
         pass
 
+    def find_closest_common_ancestor(self,nodelist):
+        """ Find the common ancestor of two leaf nodes"""
+        self.setLeafNodeOrder()
+        common_ancestors = set(self.nodes()) - set(self.leaf_nodes)
+        for node in nodelist:
+            if node not in self.leaf_nodes:
+                raise ValueError("You should provide a list of leaf nodes!")
+            ancestors_node = nx.ancestors(self,node)
+            common_ancestors= common_ancestors.intersection(ancestors_node)
+            ordered_ancestors = nx.topological_sort(self, reverse=True)
+
+        for node in ordered_ancestors:
+            if node in common_ancestors:
+                return node
+
+
     ##
     ## PART 3 --- SAMPLING FUNCTIONS
-    ## TODO: externalize or keep internal?
 
     def generateNetworkBeta(self,mode='Undirected'):
         """
@@ -297,15 +320,13 @@ class GHRG(nx.DiGraph):
             children=self.node[v]['children']
             Nr=self.node[v]['Nr']
             Er=self.node[v]['Er']
-            # NOTE: if Nr / Er matrices contain non-zero diagonals, then we create too many edges due to the leaf nodes.
-            # possible alternative is to ignore leaf nodes here in the sampling
-            # this might be the cleaner solution
 
             for ci,cj in izip(*Nr.nonzero()):
                 try:
                     childi=self.node[children[ci]]
                     childj=self.node[children[cj]]
-                except IndexError:      # if it is a leaf node
+                # if it is a leaf node
+                except IndexError:
                     childi=self.node[v]
                     childj=self.node[v]
                 try:
@@ -317,10 +338,11 @@ class GHRG(nx.DiGraph):
                         p = Er[ci,cj]/Nr[ci,cj]
                     else :
                         error('edge probabilities undefined')
-                    # print "Probability"
-                    # print ci, cj, p
                 except ValueError:
                     print "Something went wrong when sampling from the model"
+
+                if ci == cj and len(children) != 0:
+                    error("Only leave nodes should have a nonzero diagonal specified")
 
                 # create edges to insert
                 edges = (np.random.rand(childi['n']*childj['n'])< p).reshape((childi['n'],childj['n']))

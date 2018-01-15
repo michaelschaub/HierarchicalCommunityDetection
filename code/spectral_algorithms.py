@@ -639,12 +639,6 @@ def calculate_proj_error(evecs,H,norm):
         norm2 = scipy.linalg.norm(proj2,2)
         error = .5*(norm1+norm2)
 
-    #~ print 'H\n',H.A
-    #~ print 'V\n',V
-    #~ print proj1
-    #~ print norm1,norm2,error
-    #~ print '\n\n\n\n'
-
     return error
 
 def construct_normalised_Laplacian(Omega, reg):
@@ -847,6 +841,7 @@ def compute_number_links_between_groups(A,partition_vec,directed=True):
     """
     Compute the number of possible and actual links between the groups indicated in the
     partition vector.
+    TODO: option to declare whether self-loops should be accounted for!?
     """
 
     pmatrix = create_partition_matrix_from_vector(partition_vec)
