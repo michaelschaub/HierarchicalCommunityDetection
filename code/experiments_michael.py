@@ -246,3 +246,38 @@ def plot_results_overlap(SNR,overlap_Bethe,overlap_Rohe,overlap_Seidel):
     plt.legend()
     plt.xlabel("SNR")
     plt.ylabel("overlap score")
+
+
+def createTiagoHierNetwork():
+    a = 0.95
+    b = 0.75
+    c = 0.3
+    d = 0.3
+    Omega = np.array([[a, b, b, 0, 0, 0, d, 0, 0, 0, 0, 0],
+                      [0, a, b, 0, 0, 0, 0, d, 0, 0, 0, 0],
+                      [0, 0, a, c, 0, 0, 0, 0, d, 0, 0, 0],
+                      [0, 0, 0, a, b, b, 0, 0, 0, d, 0, 0],
+                      [0, 0, 0, 0, a, b, 0, 0, 0, 0, d, 0],
+                      [0, 0, 0, 0, 0, a, 0, 0, 0, 0, 0, d],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+    Omega = Omega + Omega.T -np.diagflat(np.diag(Omega))
+    plt.imshow(Omega)
+
+    # get some eigenvectors
+    nc = np.ones(12,dtype=int)*300
+    A = sample_networks.sample_block_model(Omega,nc)
+    Ln,_ = spectral.construct_normalised_Laplacian(A,False)
+
+    ev, evecs = scipy.sparse.linalg.eigsh(Ln,12,which='LM')
+
+    for i in range(12):
+        plt.figure()
+        plt.plot(evecs[:,i])
+
+    plt.figure()
+    plt.plot(ev)

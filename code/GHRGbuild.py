@@ -1,8 +1,8 @@
 from __future__ import division
 
 import numpy as np
-
 import GHRGmodel
+import networkx as nx
 
 
 def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
@@ -117,5 +117,11 @@ def createNonSymmetric2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,combine_g
        This would result in a model in which the first group is now 'flat', and within
        the second group with heterogeneous group sizes.
     """
-    D = create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,combine_groups)
+    D = create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
 
+    for combination in combine_groups:
+        root_node = G.find_closest_common_ancestor(combination)
+        # merge_nodes_below_root()
+
+def merge_nodes_below_root():
+    pass
