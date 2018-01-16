@@ -99,6 +99,15 @@ def calculate_precision_recall(score_matrix):
     precision = np.max(score_matrix,1).sum()/pred_lvls
     return precision, recall
 
+def compare_levels(true_pvec,inf_pvec):
+    true_levels = [len(np.unique(pv)) for pv in true_pvec]
+    inf_levels = np.array([len(np.unique(pv)) for pv in inf_pvec])
+    
+    match = [np.argmin(np.abs(inf_levels-tl)) for tl in true_levels]
+    diff = [inf_levels[mi]-tl for mi,tl in zip(match,true_levels)]
+    return diff
+    
+
 
 def create_partition_matrix_from_vector(partition_vec):
     """
