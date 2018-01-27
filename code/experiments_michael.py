@@ -252,7 +252,7 @@ def createTiagoHierNetwork():
     a = 0.95
     b = 0.75
     c = 0.3
-    d = 0.3
+    d = 0.1
     Omega = np.array([[a, b, b, 0, 0, 0, d, 0, 0, 0, 0, 0],
                       [0, a, b, 0, 0, 0, 0, d, 0, 0, 0, 0],
                       [0, 0, a, c, 0, 0, 0, 0, d, 0, 0, 0],
@@ -269,7 +269,7 @@ def createTiagoHierNetwork():
     plt.imshow(Omega)
 
     # get some eigenvectors
-    nc = np.ones(12,dtype=int)*300
+    nc = np.ones(12,dtype=int)*100
     A = sample_networks.sample_block_model(Omega,nc)
     Ln,_ = spectral.construct_normalised_Laplacian(A,False)
 

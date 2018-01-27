@@ -56,7 +56,7 @@ def calculate_proj_error(U,V,norm):
 
     return error
 
-def test_random_projection(n=300,k=3,p=24):
+def test_random_projection(n=24,k=3,p=21):
     """Within an n dimensional space, project an orthogonal set of k vectors (a k-dimensional subspace) into a space of dimension p"""
 
     nsamples = 250
