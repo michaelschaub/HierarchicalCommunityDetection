@@ -13,7 +13,7 @@ from scipy.stats import ortho_group
 from sklearn import preprocessing
 
 """Add some small random noise to a (dense) small matrix as a perturbation"""
-def add_noise_to_small_matrix(M,snr=0.01,noise_type="gaussian"):
+def add_noise_to_small_matrix(M,snr=0.001,noise_type="gaussian"):
 
     #noise level is taken relative to the Froebenius norm
     normM = scipy.linalg.norm(M)
@@ -506,21 +506,22 @@ def test_agglomeration_ideas(groups_per_level=3):
     return D_actual
 
 def test_agglomeration_ideas_noise_pert(groups_per_level=3):
-    n=2*2700
+    # n=2**13
+    n=3**9
     snr=3
-    c_bar=100
-    n_levels=3
+    c_bar=50
+    n_levels=4
 
+    max_k = groups_per_level**n_levels
+    norm = 'F'
+    mode = 'SBM'
+    thres = 1/3
 
     #generate
     D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
     ptrue, _ = D_actual.get_partition_at_level(-1) # true partition lowest level
     G=D_actual.generateNetworkExactProb()
     A=D_actual.to_scipy_sparse_matrix(G)
-    # display A
-    plt.figure
-    # plt.spy(A,markersize=0.01)
-    plt.imshow(A.A,cmap='Greys')
 
     # do a first round of clustering with the Bethe Hessian
     # p0 = spectral.cluster_with_BetheHessian(A,num_groups=groups_per_level**n_levels,mode='unweighted', regularizer='BHa',clustermode='kmeans')
@@ -528,135 +529,137 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
     p0=ptrue.astype(int)
     p0 = spectral.relabel_partition_vec(p0)
     plt.figure()
-    plt.plot(p0)
-    plt.title("partition found / used")
+    plt.plot(p0,'x')
 
-
-    max_k = np.max(p0)+1
-    norm = 'F'
-    mode = 'SBM'
-    thres = 0.2
-    error = np.zeros(max_k)
-    likelihood = np.zeros(max_k)
 
     # aggregate matrix
-    # TODO: perhaps we should have the EEP normalization here?!
     Eagg, Nagg = spectral.compute_number_links_between_groups(A,p0)
     Aagg = Eagg / Nagg
-    plt.figure()
-    plt.imshow(Aagg,interpolation='nearest')
-    plt.title("aggregated A matrix")
+    aggregate = True
 
-    reg= False
-    # normalized Laplacian is D^-1/2 A D^-1/2
-    L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Aagg,reg)
-    # D = scipy.sparse.diags(np.array(Aagg.sum(1)).flatten(),0)
-    # L = D - Aagg
-    # plt.figure()
-    # plt.imshow(L,interpolation='none')
-    if reg:
-        # set tau to average degree
-        tau = Aagg.sum()/Aagg.shape[0]
-    else:
-        tau = 0
-
-    ev, evecs = scipy.linalg.eigh(L)
-    index = np.argsort(np.abs(ev))
-    evecs = evecs[:,index[::-1]]
-    sigma = np.abs(ev[index[::-1]])
-    # evecs = evecs[:,index]
-    plt.figure()
-    plt.plot(sigma)
-    plt.title("Singular values")
-
-    total_energy = sigma.sum()
-    sigma_gap = np.abs(np.diff(sigma))
-    approx_energy = np.cumsum(sigma)
-    plt.figure()
-    plt.plot(1+np.arange(1,max_k),sigma_gap)
-    plt.title("Singular values gap")
-
-
-    plt.figure()
-    plt.plot(1+np.arange(1,max_k),np.diff(approx_energy/total_energy))
-    plt.title("Approximation quality / energy")
-
-    plt.figure()
-    plt.plot(evecs)
-    plt.title("eigenvectors")
-
-
-    for k in range(max_k):
-
-        partition_vec, Hnorm = spectral.find_partition(evecs, k+1, tau, norm, mode, Dtau_sqrt_inv)
-        H = spectral.create_partition_matrix_from_vector(partition_vec)
-        error[k] = calculate_proj_error(evecs, Hnorm, norm)
-        likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
-        print("K, error / exp rand error, likelihood")
-        print(k+1, error[k], likelihood[k])
-
-        partition_vec = clusterEVwithQR(evecs[:,:k+1])
-        H = spectral.create_partition_matrix_from_vector(partition_vec)
-        Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
-        error[k] = calculate_proj_error(evecs, Hnorm, norm)
-        likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
-        print("K, error / exp rand error, likelihood")
-        print(k+1, error[k], likelihood[k])
-
-    plt.figure()
-    plt.plot(1+np.arange(max_k),error)
-    plt.title("projection error")
-
-    plt.figure()
-    plt.plot(1+np.arange(max_k),likelihood)
-    plt.title("likelihood")
-
-    num_pert = 20
-    error = np.zeros((num_pert,max_k))
-    likelihood = np.zeros((num_pert,max_k))
-    for pp in range(20):
-        Anew = add_noise_to_small_matrix(Aagg)
+    while aggregate:
+        max_k = np.max(p0)+1
+        error = np.zeros(max_k)
+        likelihood = np.zeros(max_k)
+        print "\n\nAggregation round started"
+        print("maximal k ", max_k)
         reg= False
         # normalized Laplacian is D^-1/2 A D^-1/2
-        L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Anew,reg)
-        if reg:
-            # set tau to average degree
-            tau = Anew.sum()/Anew.shape[0]
-        else:
-            tau = 0
-
+        L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Aagg,reg)
+        tau = 0
         ev, evecs = scipy.linalg.eigh(L)
+
         index = np.argsort(np.abs(ev))
         evecs = evecs[:,index[::-1]]
         sigma = np.abs(ev[index[::-1]])
 
+        # evecs = evecs[:,index]
+        # plt.figure()
+        # plt.plot(sigma)
+        # plt.title("Singular values")
+        # total_energy = sigma.sum()
+        # sigma_gap = np.abs(np.diff(sigma))
+        # approx_energy = np.cumsum(sigma)
+        # plt.figure()
+        # plt.plot(1+np.arange(1,max_k),sigma_gap)
+        # plt.title("Singular values gap")
+        # plt.figure()
+        # plt.plot(1+np.arange(1,max_k),np.diff(approx_energy/total_energy))
+        # plt.title("Approximation quality / energy")
+        # plt.figure()
+        # plt.plot(evecs)
+        # plt.title("eigenvectors")
+
+
+        candidates_for_hier = np.zeros(max_k)
         for k in range(max_k):
 
             partition_vec, Hnorm = spectral.find_partition(evecs, k+1, tau, norm, mode, Dtau_sqrt_inv)
             H = spectral.create_partition_matrix_from_vector(partition_vec)
-            error[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
-            likelihood[pp,k] = compute_likelihood_SBM(partition_vec[p0],A)
+            error[k] = calculate_proj_error(evecs, Hnorm, norm)
+            likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
             print("K, error / exp rand error, likelihood")
-            print(k+1, error[pp,k], likelihood[pp,k])
+            print(k+1, error[k], likelihood[k])
 
-            partition_vec = clusterEVwithQR(evecs[:,:k+1])
-            H = spectral.create_partition_matrix_from_vector(partition_vec)
-            Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
-            error[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
-            likelihood[pp,k] = compute_likelihood_SBM(partition_vec[p0],A)
-            print("K, error / exp rand error, likelihood")
-            print(k+1, error[pp,k], likelihood[pp,k])
+            # partition_vec = clusterEVwithQR(evecs[:,:k+1])
+            # H = spectral.create_partition_matrix_from_vector(partition_vec)
+            # Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
+            # error[k] = calculate_proj_error(evecs, Hnorm, norm)
+            # likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
+            # print("K, error / exp rand error, likelihood")
+            # print(k+1, error[k], likelihood[k])
+            if error[k] - thres < 0:
+                candidates_for_hier[k] = 1
 
-    plt.figure()
-    plt.plot(1+np.arange(max_k),error.T)
-    plt.title("projection error")
+        relative_minima = argrelmin(error)[0] + 1
+        candidate_list = np.nonzero(candidates_for_hier)[0] + 1
+        filtered_candidates_local_minima = np.intersect1d(relative_minima, candidate_list)
+        filter_start = np.nonzero(np.diff(candidates_for_hier)==-1)[0]+1
+        filtered_candidates = np.union1d(filtered_candidates_local_minima,filter_start)
+        filtered_candidates = np.setdiff1d(filtered_candidates,np.ones(1))
+        print "Candidate levels for merging"
+        print filtered_candidates
 
-    plt.figure()
-    plt.plot(1+np.arange(max_k),likelihood.T)
-    plt.title("likelihood")
+        print "\n\ncreating perturbed samples"
+        num_pert = 10
+        error_rand = np.zeros((num_pert,max_k))
+        likelihood_rand = np.zeros((num_pert,max_k))
+        for pp in range(num_pert):
+            Anew = add_noise_to_small_matrix(Aagg)
+            reg= False
+            # normalized Laplacian is D^-1/2 A D^-1/2
+            L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Anew,reg)
+            if reg:
+                # set tau to average degree
+                tau = Anew.sum()/Anew.shape[0]
+            else:
+                tau = 0
 
+            ev, evecs = scipy.linalg.eigh(L)
+            index = np.argsort(np.abs(ev))
+            evecs = evecs[:,index[::-1]]
+            sigma = np.abs(ev[index[::-1]])
+
+            for k in filtered_candidates:
+
+                # partition_vec, Hnorm = spectral.find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
+                # error_rand[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
+                # likelihood_rand[pp,k] = compute_likelihood_SBM(partition_vec[p0],A)
+                # print("K, error / exp rand error, likelihood")
+                # print(k, error_rand[pp,k], likelihood_rand[pp,k])
+
+                partition_vec = clusterEVwithQR(evecs[:,:k])
+                H = spectral.create_partition_matrix_from_vector(partition_vec)
+                Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
+                error_rand[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
+                likelihood_rand[pp,k] = compute_likelihood_SBM(partition_vec[p0],A)
+                print("K, error / exp rand error, likelihood")
+                print(k, error_rand[pp,k], likelihood_rand[pp,k])
+
+        found_partition = False
+
+        for k in filtered_candidates[::-1]:
+            std = scipy.std(error_rand[:,k])
+            if std  < 0.01 :
+                print "std: ", std
+                print "\nAgglomeration Test passed, at level\n", k
+                found_partition = True
+                partition_vec = clusterEVwithQR(evecs[:,:k])
+                p0 = partition_vec[p0]
+                p0 = spectral.relabel_partition_vec(p0)
+                plt.plot(p0,'-')
+                break
+
+
+        if found_partition:
+            Eagg, Nagg = spectral.compute_number_links_between_groups(A,p0)
+            Aagg = Eagg / Nagg
+            aggregate = True
+        else:
+            aggregate = False
 
     return D_actual
+
 def agglomeration_loop_SNR():
     n = 2 * 2700
     SNR = np.arange(0.5, 10.5, 0.5)  # start, stop (exclusive), spacing
