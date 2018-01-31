@@ -10,7 +10,25 @@ import sample_networks
 from matplotlib import pyplot as plt
 from scipy.signal import argrelmin
 from scipy.stats import ortho_group
+from sklearn import preprocessing
 
+"""Add some small random noise to a (dense) small matrix as a perturbation"""
+def add_noise_to_small_matrix(M,snr=0.01,noise_type="gaussian"):
+
+    #noise level is taken relative to the Froebenius norm
+    normM = scipy.linalg.norm(M)
+
+    if noise_type == "uniform":
+        #TODO -- should we have uniform noise?
+        pass
+    elif noise_type == "gaussian":
+        n,m = M.shape
+        noise = scipy.triu(scipy.random.randn(n,m))
+        noise = noise + noise.T -scipy.diag(scipy.diag(noise))
+        normNoise = scipy.linalg.norm(noise)
+        Mp = M + snr*normM/normNoise*noise
+
+    return Mp
 
 def pseudoinverse_partition_indicator(H):
     """ function to compute the pseudoinverse H^+ of the partition indicator matrix H"""
@@ -95,6 +113,8 @@ def calculate_proj_error(evecs,H,norm):
         error = .5*(norm1+norm2)
 
     return error
+
+
 def test_subspace_angle():
     U = ortho_group.rvs(dim=20)
     U = U[:,1:10]
@@ -104,6 +124,32 @@ def test_subspace_angle():
     return angle
 
 def find_subspace_angle_between_ev_bases(U,V):
+    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    # % a modified algorithm for calculating the principal angles %
+    # % between the two subspaces spanned by the columns of       %
+    # % A and B. Good for small (<10^(-6)) and large angles.   %
+    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    # function [angles] = mPrinAngles(A,B)
+    # [Qa,Ra] = qr(A,0);
+    # [Qb,Rb] = qr(B,0);
+    # C = svd((Qa')*Qb,0);
+    # rkA = rank(Qa);
+    # rkB = rank(Qb);
+    # if rkA >= rkB
+    # B = Qb - Qa*(Qa'*Qb);
+    # else
+    # B = Qa - Qb*(Qb'*Qa);
+    # end
+    # S = svd(B,0);
+    # S = sort(S);
+    # for i = 1:min(rkA,rkB)
+    # if (C(i))^2 < 0.5
+    # angles(i) = acos(C(i));
+    # elseif (S(i))^2 <= 0.5
+    # angles(i) = asin(S(i));
+    # end
+    # end
+    # angles=angles'
     Q1 = U.T.dot(V)
     sigma = scipy.linalg.svd(Q1,compute_uv=False)
     angle = -np.ones(sigma.size)
@@ -118,32 +164,67 @@ def find_subspace_angle_between_ev_bases(U,V):
         angle[sin_index] = np.arcsin(sigma2[sin_index])
 
     return angle
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# % a modified algorithm for calculating the principal angles %
-# % between the two subspaces spanned by the columns of       %
-# % A and B. Good for small (<10^(-6)) and large angles.   %
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# function [angles] = mPrinAngles(A,B)
-# [Qa,Ra] = qr(A,0);
-# [Qb,Rb] = qr(B,0);
-# C = svd((Qa')*Qb,0);
-# rkA = rank(Qa);
-# rkB = rank(Qb);
-# if rkA >= rkB
-# B = Qb - Qa*(Qa'*Qb);
-# else
-# B = Qa - Qb*(Qb'*Qa);
-# end
-# S = svd(B,0);
-# S = sort(S);
-# for i = 1:min(rkA,rkB)
-# if (C(i))^2 < 0.5
-# angles(i) = acos(C(i));
-# elseif (S(i))^2 <= 0.5
-# angles(i) = asin(S(i));
-# end
-# end
-# angles=angles'
+
+def clusterEVwithQR(EV, randomized=False, gamma=4):
+    """Given a set of eigenvectors find the clusters of the SBM"""
+    if randomized is True:
+        Z, Q = orthogonalizeQR_randomized(EV,gamma)
+    else:
+        Z, Q = orthogonalizeQR(EV)
+
+    cluster_ = scipy.absolute(Z).argmax(axis=1)
+
+    return cluster_
+
+def orthogonalizeQR(EV):
+    """Given a set of eigenvectors V coming from a operator associated to the SBM,
+    use QR decomposition as described in Damle et al 2017, to compute new coordinate
+    vectors aligned with clustering vectors
+    Input EV is an N x k matrix where each column corresponds to an eigenvector
+    """
+    k = EV.shape[1]
+    Q, R, P = scipy.linalg.qr(EV.T, mode='economic', pivoting=True)
+    # get indices of k representative points
+    P = P[:k]
+
+    # polar decomposition to find nearest orthogonal matrix
+    U, S, V = scipy.linalg.svd(EV[P,:].T,full_matrices=False)
+
+    #TODO: check this part!
+    # Z = EV.dot(U.dot(V.T))
+    Z = EV.dot(EV[P,:].T)
+
+    return Z, Q
+
+def orthogonalizeQR_randomized(EV,gamma=4):
+    """Given a set of eigenvectors V coming from a operator associated to the SBM,
+    use randomized QR decomposition as described in Damle et al 2017, to compute new
+    coordinate vectors aligned with clustering vectors.
+
+    Input EV is an N x k matrix where each column corresponds to an eigenvector
+    gamma is the oversampling factor
+    """
+    n, k = EV.shape
+
+    # sample EV according to leverage scores and the build QR from those vectors
+    count = scipy.minimum(scipy.ceil(gamma*k*scipy.log(k)),n)
+    elements = np.arange(n)
+    prob = (EV.T**2).sum(axis=0)
+    probabilities = prob / prob.sum()
+    elements = np.random.choice(elements, count, p=probabilities)   #changed to np.random (since scipy.random is not a real module)
+    ellemens = scipy.unique(elements)
+
+
+    Q, R, P = scipy.linalg.qr(EV[elements,:].T, mode='economic', pivoting=True)
+    # get indices of k representative points
+    P = P[:k]
+
+    # polar decomposition to find nearest orthogonal matrix
+    U, S, V = scipy.linalg.svd(EV[P,:].T,full_matrices=False)
+
+    Z = EV.dot(U.dot(V.T))
+
+    return Z, Q
 
 
 
@@ -319,9 +400,9 @@ def createCliqueNetwork():
 
 def test_agglomeration_ideas(groups_per_level=3):
     n=2*2700
-    snr=10
+    snr=3
     c_bar=100
-    n_levels=3
+    n_levels=1
 
 
     #generate
@@ -341,7 +422,15 @@ def test_agglomeration_ideas(groups_per_level=3):
     p0 = spectral.relabel_partition_vec(p0)
     plt.figure()
     plt.plot(p0)
+    plt.title("partition found / used")
 
+
+    max_k = np.max(p0)+1
+    norm = 'F'
+    mode = 'SBM'
+    thres = 0.2
+    error = np.zeros(max_k)
+    likelihood = np.zeros(max_k)
 
     # aggregate matrix
     # TODO: perhaps we should have the EEP normalization here?!
@@ -349,6 +438,7 @@ def test_agglomeration_ideas(groups_per_level=3):
     Aagg = Eagg / Nagg
     plt.figure()
     plt.imshow(Aagg,interpolation='nearest')
+    plt.title("aggregated A matrix")
 
     reg= False
     # normalized Laplacian is D^-1/2 A D^-1/2
@@ -370,14 +460,77 @@ def test_agglomeration_ideas(groups_per_level=3):
     # evecs = evecs[:,index]
     plt.figure()
     plt.plot(sigma)
+    plt.title("Singular values")
 
     total_energy = sigma.sum()
     sigma_gap = np.abs(np.diff(sigma))
     approx_energy = np.cumsum(sigma)
     plt.figure()
-    plt.plot(sigma_gap)
+    plt.plot(1+np.arange(1,max_k),sigma_gap)
+    plt.title("Singular values gap")
+
+
     plt.figure()
-    plt.plot(np.diff(approx_energy/total_energy))
+    plt.plot(1+np.arange(1,max_k),np.diff(approx_energy/total_energy))
+    plt.title("Approximation quality / energy")
+
+    plt.figure()
+    plt.plot(evecs)
+    plt.title("eigenvectors")
+
+
+    for k in range(max_k):
+
+        partition_vec, Hnorm = spectral.find_partition(evecs, k+1, tau, norm, mode, Dtau_sqrt_inv)
+        H = spectral.create_partition_matrix_from_vector(partition_vec)
+        error[k] = calculate_proj_error(evecs, Hnorm, norm)
+        likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
+        print("K, error / exp rand error, likelihood")
+        print(k+1, error[k], likelihood[k])
+
+        partition_vec = clusterEVwithQR(evecs[:,:k+1])
+        H = spectral.create_partition_matrix_from_vector(partition_vec)
+        Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
+        error[k] = calculate_proj_error(evecs, Hnorm, norm)
+        likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
+        print("K, error / exp rand error, likelihood")
+        print(k+1, error[k], likelihood[k])
+
+    plt.figure()
+    plt.plot(1+np.arange(max_k),error)
+    plt.title("projection error")
+
+    plt.figure()
+    plt.plot(1+np.arange(max_k),likelihood)
+    plt.title("likelihood")
+    return D_actual
+
+def test_agglomeration_ideas_noise_pert(groups_per_level=3):
+    n=2*2700
+    snr=3
+    c_bar=100
+    n_levels=3
+
+
+    #generate
+    D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
+    ptrue, _ = D_actual.get_partition_at_level(-1) # true partition lowest level
+    G=D_actual.generateNetworkExactProb()
+    A=D_actual.to_scipy_sparse_matrix(G)
+    # display A
+    plt.figure
+    # plt.spy(A,markersize=0.01)
+    plt.imshow(A.A,cmap='Greys')
+
+    # do a first round of clustering with the Bethe Hessian
+    # p0 = spectral.cluster_with_BetheHessian(A,num_groups=groups_per_level**n_levels,mode='unweighted', regularizer='BHa',clustermode='kmeans')
+    # p0 = spectral.cluster_with_BetheHessian(A,num_groups=-1,mode='unweighted', regularizer='BHa',clustermode='kmeans')
+    p0=ptrue.astype(int)
+    p0 = spectral.relabel_partition_vec(p0)
+    plt.figure()
+    plt.plot(p0)
+    plt.title("partition found / used")
+
 
     max_k = np.max(p0)+1
     norm = 'F'
@@ -386,8 +539,55 @@ def test_agglomeration_ideas(groups_per_level=3):
     error = np.zeros(max_k)
     likelihood = np.zeros(max_k)
 
+    # aggregate matrix
+    # TODO: perhaps we should have the EEP normalization here?!
+    Eagg, Nagg = spectral.compute_number_links_between_groups(A,p0)
+    Aagg = Eagg / Nagg
+    plt.figure()
+    plt.imshow(Aagg,interpolation='nearest')
+    plt.title("aggregated A matrix")
+
+    reg= False
+    # normalized Laplacian is D^-1/2 A D^-1/2
+    L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Aagg,reg)
+    # D = scipy.sparse.diags(np.array(Aagg.sum(1)).flatten(),0)
+    # L = D - Aagg
+    # plt.figure()
+    # plt.imshow(L,interpolation='none')
+    if reg:
+        # set tau to average degree
+        tau = Aagg.sum()/Aagg.shape[0]
+    else:
+        tau = 0
+
+    ev, evecs = scipy.linalg.eigh(L)
+    index = np.argsort(np.abs(ev))
+    evecs = evecs[:,index[::-1]]
+    sigma = np.abs(ev[index[::-1]])
+    # evecs = evecs[:,index]
+    plt.figure()
+    plt.plot(sigma)
+    plt.title("Singular values")
+
+    total_energy = sigma.sum()
+    sigma_gap = np.abs(np.diff(sigma))
+    approx_energy = np.cumsum(sigma)
+    plt.figure()
+    plt.plot(1+np.arange(1,max_k),sigma_gap)
+    plt.title("Singular values gap")
+
+
+    plt.figure()
+    plt.plot(1+np.arange(1,max_k),np.diff(approx_energy/total_energy))
+    plt.title("Approximation quality / energy")
+
+    plt.figure()
+    plt.plot(evecs)
+    plt.title("eigenvectors")
+
 
     for k in range(max_k):
+
         partition_vec, Hnorm = spectral.find_partition(evecs, k+1, tau, norm, mode, Dtau_sqrt_inv)
         H = spectral.create_partition_matrix_from_vector(partition_vec)
         error[k] = calculate_proj_error(evecs, Hnorm, norm)
@@ -395,12 +595,68 @@ def test_agglomeration_ideas(groups_per_level=3):
         print("K, error / exp rand error, likelihood")
         print(k+1, error[k], likelihood[k])
 
+        partition_vec = clusterEVwithQR(evecs[:,:k+1])
+        H = spectral.create_partition_matrix_from_vector(partition_vec)
+        Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
+        error[k] = calculate_proj_error(evecs, Hnorm, norm)
+        likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
+        print("K, error / exp rand error, likelihood")
+        print(k+1, error[k], likelihood[k])
+
     plt.figure()
     plt.plot(1+np.arange(max_k),error)
+    plt.title("projection error")
+
     plt.figure()
     plt.plot(1+np.arange(max_k),likelihood)
-    return D_actual
+    plt.title("likelihood")
 
+    num_pert = 20
+    error = np.zeros((num_pert,max_k))
+    likelihood = np.zeros((num_pert,max_k))
+    for pp in range(20):
+        Anew = add_noise_to_small_matrix(Aagg)
+        reg= False
+        # normalized Laplacian is D^-1/2 A D^-1/2
+        L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Anew,reg)
+        if reg:
+            # set tau to average degree
+            tau = Anew.sum()/Anew.shape[0]
+        else:
+            tau = 0
+
+        ev, evecs = scipy.linalg.eigh(L)
+        index = np.argsort(np.abs(ev))
+        evecs = evecs[:,index[::-1]]
+        sigma = np.abs(ev[index[::-1]])
+
+        for k in range(max_k):
+
+            partition_vec, Hnorm = spectral.find_partition(evecs, k+1, tau, norm, mode, Dtau_sqrt_inv)
+            H = spectral.create_partition_matrix_from_vector(partition_vec)
+            error[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
+            likelihood[pp,k] = compute_likelihood_SBM(partition_vec[p0],A)
+            print("K, error / exp rand error, likelihood")
+            print(k+1, error[pp,k], likelihood[pp,k])
+
+            partition_vec = clusterEVwithQR(evecs[:,:k+1])
+            H = spectral.create_partition_matrix_from_vector(partition_vec)
+            Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
+            error[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
+            likelihood[pp,k] = compute_likelihood_SBM(partition_vec[p0],A)
+            print("K, error / exp rand error, likelihood")
+            print(k+1, error[pp,k], likelihood[pp,k])
+
+    plt.figure()
+    plt.plot(1+np.arange(max_k),error.T)
+    plt.title("projection error")
+
+    plt.figure()
+    plt.plot(1+np.arange(max_k),likelihood.T)
+    plt.title("likelihood")
+
+
+    return D_actual
 def agglomeration_loop_SNR():
     n = 2 * 2700
     SNR = np.arange(0.5, 10.5, 0.5)  # start, stop (exclusive), spacing
