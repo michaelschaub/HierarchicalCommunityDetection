@@ -528,7 +528,7 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
     # p0 = spectral.cluster_with_BetheHessian(A,num_groups=-1,mode='unweighted', regularizer='BHa',clustermode='kmeans')
     p0=ptrue.astype(int)
     p0 = spectral.relabel_partition_vec(p0)
-    plt.figure()
+    plt.figure(1)
     plt.plot(p0,'x')
 
 
@@ -540,6 +540,8 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
     while aggregate:
         max_k = np.max(p0)+1
         error = np.zeros(max_k)
+        angle_min = np.zeros(max_k)
+        angle_max = np.zeros(max_k)
         likelihood = np.zeros(max_k)
         print "\n\nAggregation round started"
         print("maximal k ", max_k)
@@ -577,6 +579,9 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
             partition_vec, Hnorm = spectral.find_partition(evecs, k+1, tau, norm, mode, Dtau_sqrt_inv)
             H = spectral.create_partition_matrix_from_vector(partition_vec)
             error[k] = calculate_proj_error(evecs, Hnorm, norm)
+            angles = find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k+1])
+            angle_min[k] = np.min(angles)
+            angle_max[k] = np.max(angles)
             likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
             print("K, error / exp rand error, likelihood")
             print(k+1, error[k], likelihood[k])
@@ -591,18 +596,18 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
             if error[k] - thres < 0:
                 candidates_for_hier[k] = 1
 
-        relative_minima = argrelmin(error)[0] + 1
-        candidate_list = np.nonzero(candidates_for_hier)[0] + 1
-        filtered_candidates_local_minima = np.intersect1d(relative_minima, candidate_list)
-        filter_start = np.nonzero(np.diff(candidates_for_hier)==-1)[0]+1
-        filtered_candidates = np.union1d(filtered_candidates_local_minima,filter_start)
-        filtered_candidates = np.setdiff1d(filtered_candidates,np.ones(1))
-        print "Candidate levels for merging"
-        print filtered_candidates
+        plt.figure(4)
+        plt.plot(1+np.arange(max_k),angle_max)
+        plt.plot(1+np.arange(max_k),angle_min)
 
+        candidate_list = np.nonzero(candidates_for_hier)[0]+1
+        print "\ninitial candidate_list: "
+        print candidate_list
         print "\n\ncreating perturbed samples"
         num_pert = 10
-        error_rand = np.zeros((num_pert,max_k))
+        error_rand = np.ones((num_pert,max_k))
+        angle_max_rand = np.zeros((num_pert,max_k))
+        angle_min_rand = np.zeros((num_pert,max_k))
         likelihood_rand = np.zeros((num_pert,max_k))
         for pp in range(num_pert):
             Anew = add_noise_to_small_matrix(Aagg)
@@ -620,7 +625,7 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
             evecs = evecs[:,index[::-1]]
             sigma = np.abs(ev[index[::-1]])
 
-            for k in filtered_candidates:
+            for k in candidate_list:
 
                 # partition_vec, Hnorm = spectral.find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
                 # error_rand[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
@@ -631,15 +636,52 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
                 partition_vec = clusterEVwithQR(evecs[:,:k])
                 H = spectral.create_partition_matrix_from_vector(partition_vec)
                 Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
-                error_rand[pp,k] = calculate_proj_error(evecs, Hnorm, norm)
-                likelihood_rand[pp,k] = compute_likelihood_SBM(partition_vec[p0],A)
+                error_rand[pp,k-1] = calculate_proj_error(evecs, Hnorm, norm)
+                angle_min_rand[pp,k-1] = np.min(find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k]))
+                angle_max_rand[pp,k-1] = np.max(find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k]))
+                likelihood_rand[pp,k-1] = compute_likelihood_SBM(partition_vec[p0],A)
                 print("K, error / exp rand error, likelihood")
-                print(k, error_rand[pp,k], likelihood_rand[pp,k])
+                print(k, error_rand[pp,k-1], likelihood_rand[pp,k-1])
+
+        error_av = np.mean(error_rand,0)
+        error_std = np.std(error_rand,0)
+        plt.figure(2)
+        plt.plot(1+np.arange(max_k),error_av)
+        plt.plot(np.array([3, 9, 27]),0.1*np.ones(3),'o')
+        plt.figure(3)
+        plt.plot(1+np.arange(max_k),error_std)
+        plt.plot(np.array([3, 9, 27]),0.1*np.ones(3),'o')
+
+        angle_min_rand_av = np.mean(angle_min_rand,0)
+        angle_max_rand_av = np.mean(angle_max_rand,0)
+        angle_min_rand_std = np.std(angle_min_rand,0)
+        angle_max_rand_std = np.std(angle_max_rand,0)
+        plt.figure(5)
+        plt.errorbar(1+np.arange(max_k),angle_min_rand_av,yerr=angle_min_rand_std)
+        plt.plot(np.array([3, 9, 27]),0.1*np.ones(3),'o')
+        plt.figure(6)
+        plt.errorbar(1+np.arange(max_k),angle_max_rand_av,yerr=angle_max_rand_std)
+        plt.plot(np.array([3, 9, 27]),0.1*np.ones(3),'o')
+
+
+        relative_minima = argrelmin(error_av)[0] + 1
+        print "Relative minima"
+        print relative_minima
+        filtered_candidates_local_minima = np.intersect1d(relative_minima, candidate_list)
+        filter_start = np.nonzero(np.diff(candidates_for_hier)==-1)[0]+1
+        print "Filter start"
+        print filter_start
+        filtered_candidates = np.union1d(filtered_candidates_local_minima,filter_start)
+        # filtered_candidates = filtered_candidates_local_minima
+        filtered_candidates = np.setdiff1d(filtered_candidates,np.ones(1))
+        print "Candidate levels for merging"
+        print filtered_candidates
 
         found_partition = False
 
         for k in filtered_candidates[::-1]:
-            std = scipy.std(error_rand[:,k])
+            print k
+            std = scipy.std(error_rand[:,k-1])
             if std  < 0.01 :
                 print "std: ", std
                 print "\nAgglomeration Test passed, at level\n", k
@@ -647,6 +689,7 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
                 partition_vec = clusterEVwithQR(evecs[:,:k])
                 p0 = partition_vec[p0]
                 p0 = spectral.relabel_partition_vec(p0)
+                plt.figure(1)
                 plt.plot(p0,'-')
                 break
 
