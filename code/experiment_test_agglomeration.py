@@ -505,12 +505,12 @@ def test_agglomeration_ideas(groups_per_level=3):
     plt.title("likelihood")
     return D_actual
 
-def test_agglomeration_ideas_noise_pert(groups_per_level=3):
+def test_agglomeration_ideas_noise_pert(groups_per_level=4):
     # n=2**13
-    n=3**9
-    snr=3
+    n=4**7
+    snr=7
     c_bar=50
-    n_levels=4
+    n_levels=3
 
     max_k = groups_per_level**n_levels
     norm = 'F'
@@ -668,7 +668,11 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=3):
         print "Relative minima"
         print relative_minima
         filtered_candidates_local_minima = np.intersect1d(relative_minima, candidate_list)
-        filter_start = np.nonzero(np.diff(candidates_for_hier)==-1)[0]+1
+        if filtered_candidates_local_minima.size <=1:
+            filter_start = np.nonzero(np.diff(candidates_for_hier)==-1)[0]+1
+            filter_start = filter_start[0:1]
+        else:
+            filter_start = np.ones(1,dtype=int)
         print "Filter start"
         print filter_start
         filtered_candidates = np.union1d(filtered_candidates_local_minima,filter_start)
