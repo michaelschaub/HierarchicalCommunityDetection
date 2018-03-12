@@ -16,6 +16,9 @@ import scipy.stats
 from scipy.signal import argrelextrema
 from sys import stdout
 
+# GLOBAL TODO / CHECKLIST
+# mode parameter in identify_next_level -- SBM or DCSBM?
+
 
 def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe', reps=10, noise=1e-3, use_likelihood=False):
 
@@ -24,52 +27,53 @@ def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='B
 
     # agglomerate builds list of all partitions
     pvec_agg = hier_spectral_partition_agglomerate(A,p0, mode=method_agg, reps=reps, noise=noise, use_likelihood=use_likelihood)
-    
+
     return pvec_agg
 
 
 def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise=1e-3, use_likelihood=False):
     """Performs hierarchical agglomeration of adjacency matrix and provided partition,
         based on the provided mode parameter"""
-    
+
+    # pvec stores all hier. refined partitions
     pvec = []
     pvec.append(partition)
 
+    # k == index of highest groups / number of groups = k+1
     k = np.max(partition)
-    
+
     print "HIER SPECTRAL PARTITION -- agglomerative\n Initial partition into", k+1, "groups \n"
-    
-    Ks=np.arange(k)
-    
+
+
+    # Ks stores the candidate levels in inverse order, levels is a list accounting for the 'k' values at which agglomerations were performed
+    Ks=np.arange(k)[::-1]
     levels = [k+1]
-    
     while len(Ks)>0:
-        
+
         Eagg, Nagg = compute_number_links_between_groups(A,partition)
         Aagg = Eagg / Nagg
-        
         Ks, hier_partition_vecs = identify_next_level(Aagg,max_k=k,mode='SBM',reg=False, norm='F', threshold=1/3, reps=reps, noise=noise)
-        
-        
+
         try:
             pvec.append(hier_partition_vecs[0])
-            
             partition = expand_partitions_to_full_graph(pvec)[-1]
-            
+
             k=Ks[0]-1
             levels.append(k+1)
             print 'partition into', k+1 ,' groups'
             if k==1:
                 Ks=[]
+
+        #TODO: check if below is not better described as: if there is *no candidate* partition (why only single candidate? why error not high enough -- low?!)
         #this exception occurs when there is only a single candidate partition and the error is not high enough.
         except IndexError:
             pass
-            
-    
+
+
     print "HIER SPECTRAL PARTITION -- agglomerative\n Partitions into", levels, "groups \n"
-    
+
     return expand_partitions_to_full_graph(pvec)[::-1]
-    
+
 
 
 def spectral_partition(A, mode='Lap', num_groups=2, regularizer='BHa'):
@@ -447,68 +451,73 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
+from scipy.signal import argrelmin
 def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3, reps=10, noise=1e-3):
-    
+
     #determine set of candidate k's
     if max_k == -1:
         max_k = A_.shape[0]
     Ks=np.arange(max_k,1,-1)
-    
-    #first identify partitions and their projection error 
+
+    #first identify partitions and their projection error
     Ks, sum_errors, partition_vecs = identify_partitions_and_errors(A,Ks,mode,reg, norm,partition_vecs=[])
-    
+
     #repeat with noise
     if reps>0:
-        
+
         sum_errors = 0
         std_errors = 0.
         m = 0.
-        
+
         for rep in xrange(reps):
             Anew = add_noise_to_small_matrix(A, snr=noise)
             _, errors, _ = identify_partitions_and_errors(Anew,Ks,mode,reg, norm,partition_vecs)
             sum_errors+=errors
-            
-            #calculate online variance 
+
+            #calculate online variance
             m_prev = m
             m = m + (errors - m) / (reps+1)
             std_errors = std_errors + (errors - m) * (errors - m_prev)
-            
-            
+
+
         sum_errors/=reps
-    
+
     std_errors=np.sqrt(std_errors)
-    #find errors below threshold 
-    below_thresh = (sum_errors<threshold) 
-    
+    #find errors below threshold
+    below_thresh = (sum_errors<threshold)
+
+    # TODO: we want to identify something like argrelmin, this might go wrong here..
+    # replace argrelmin by more robust variant...
+    levels2 = argrelmin(sum_errors)
+
     #difference of errors err_k - err_{k+1}
     sum_errors[1:] -= sum_errors[:-1]
-    
+
     levels = find_local_minima(sum_errors)
-    print levels
+    print levels, levels2
     print below_thresh.nonzero()[0]
-    levels = np.intersect1d(levels,below_thresh.nonzero()[0])
+    levels = np.intersect1d(levels2,below_thresh.nonzero()[0])
     print 'sum_errors',zip(Ks[sum_errors<0],sum_errors[sum_errors<0])
     print 'sum_errors',zip(Ks[below_thresh],sum_errors[below_thresh])
     #~ print 'std_errors',zip(Ks[sum_errors<0],std_errors[sum_errors<0])
     print 'Levels inferred=',len(levels), Ks[levels], sum_errors[levels], std_errors[levels]
     hier_partition_vecs=[partition_vecs[si] for si in levels]
     return Ks[levels], hier_partition_vecs
-    
 
 
 
-    
+
+
 def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition_vecs=[]):
     max_k = Ks[0]
-    
+
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
     if reg:
         # set tau to average degree
         tau = A.sum()/A.shape[0]
     else:
         tau = 0
-    
+
     # get eigenvectors
     # input A may be a sparse scipy matrix or dense format numpy 2d array.
     sparse_input = False
@@ -520,12 +529,12 @@ def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition
         sparse_input = True
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
-    
+
     #initialise errors
     error = np.zeros(len(Ks))
     #check if partitions are known
     partitions_unknown= partition_vecs==[]
-    
+
     #find partitions and their error for each k
     for ki,k in enumerate(Ks):
         if partitions_unknown:
@@ -533,16 +542,16 @@ def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition
         else :
             partition_vec = partition_vecs[ki]
             Hnorm = create_normed_partition_matrix_from_vector(partition_vec,mode)
-        
+
         #calculate and store error
         error[ki] = calculate_proj_error(evecs, Hnorm, norm)
         #~ print("K, error ")
         #~ print(k, error[ki])
-        
+
         #save partition
         if partitions_unknown:
             partition_vecs.append(partition_vec)
-    
+
     return Ks, error, partition_vecs
 
 
@@ -557,7 +566,7 @@ def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv, method='QR', n_init
 
     else:
         error('something went wrong. Please specify valid mode')
-    
+
     #select methof of clustering - QR or KM (k-means)
     if method=='QR':
         partition_vec = clusterEVwithQR(X)
@@ -569,7 +578,7 @@ def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv, method='QR', n_init
     else:
         error('something went wrong. Please specify valid clustering method')
     H = create_normed_partition_matrix_from_vector(partition_vec,mode)
-    
+
     return partition_vec, H
 
 
@@ -581,7 +590,7 @@ def calculate_proj_error(evecs,H,norm):
     V = evecs[:,:k]
     proj1 = project_orthogonal_to(H,V)
     proj2 = project_orthogonal_to(V,H)
-    
+
     if norm == 'F':
         norm1 = scipy.linalg.norm(proj1)/np.sqrt(k-k**2/n)
         norm2 = scipy.linalg.norm(proj2)/np.sqrt(k-k**2/n)
@@ -748,9 +757,9 @@ def create_partition_matrix_from_vector(partition_vec):
     return partition_matrix
 
 def create_normed_partition_matrix_from_vector(partition_vec,mode):
-    
+
     H = create_partition_matrix_from_vector(partition_vec)
-    
+
     if mode == 'DCSBM':
         Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
         H = Dtau_sqrt.dot(H)
@@ -871,16 +880,16 @@ def find_local_minima(vec):
     sign = np.sign(vec)
     #shift 0's (no difference) to positive)
     sign[sign==0] = 1
-    
+
     sign_diff = np.diff(sign)
     goes_neg = (sign_diff==-2).nonzero()[0]+1
     goes_pos = (sign_diff==2).nonzero()[0]+1
-    
+
     print "VEC", vec
     print sign_diff
     print goes_neg
     print goes_pos
-    
+
     #sometimes there are no sign changes
     try:
         if goes_neg[0]<goes_pos[0]:
@@ -895,13 +904,13 @@ def find_local_minima(vec):
             return np.array([np.argmin(vec)])
         else:
             return np.array([],dtype=int)
-    
+
     minima=[]
     print "SEG", segments
-    
+
     for seg in segments:
         minima.append(seg[0]+np.argmin(vec[seg[0]:seg[1]]))
-    
+
     return np.array(minima)
 
 """Add some small random noise to a (dense) small matrix as a perturbation"""
