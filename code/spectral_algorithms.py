@@ -17,18 +17,18 @@ from scipy.signal import argrelextrema
 from sys import stdout
 
 
-def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe', reps=10, noise=1e-3, use_likelihood=False):
+def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe', reps=10, noise=1e-3):
 
     # initial spectral clustering, performed according to method 'first pass'
     p0 = spectral_partition(A,mode=first_pass,num_groups=-1)
 
     # agglomerate builds list of all partitions
-    pvec_agg = hier_spectral_partition_agglomerate(A,p0, mode=method_agg, reps=reps, noise=noise, use_likelihood=use_likelihood)
+    pvec_agg = hier_spectral_partition_agglomerate(A,p0, mode=method_agg, reps=reps, noise=noise)
     
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise=1e-3, use_likelihood=False):
+def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise=1e-3):
     """Performs hierarchical agglomeration of adjacency matrix and provided partition,
         based on the provided mode parameter"""
     
@@ -39,7 +39,7 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise
     
     print "HIER SPECTRAL PARTITION -- agglomerative\n Initial partition into", k+1, "groups \n"
     
-    Ks=np.arange(k)
+    Ks=np.arange(k,1,-1)
     
     levels = [k+1]
     
@@ -448,7 +448,6 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 ##################################################
 
 def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3, reps=10, noise=1e-3):
-    
     #determine set of candidate k's
     if max_k == -1:
         max_k = A_.shape[0]
@@ -481,8 +480,8 @@ def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3
     #find errors below threshold 
     below_thresh = (sum_errors<threshold) 
     
-    #difference of errors err_k - err_{k+1}
-    sum_errors[1:] -= sum_errors[:-1]
+    #~ #difference of errors err_k - err_{k+1}
+    #~ sum_errors[1:] -= sum_errors[:-1]
     
     levels = find_local_minima(sum_errors)
     print levels
@@ -500,7 +499,11 @@ def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3
 
     
 def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition_vecs=[]):
-    max_k = Ks[0]
+    try:
+        max_k = Ks[0]
+    except IndexError:
+        print "\n\nKS",Ks,"\n\n"
+        print afasd
     
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
     if reg:
@@ -867,8 +870,12 @@ def expand_partitions_to_full_graph(pvecs):
     return pvec_new
 
 def find_local_minima(vec):
+    #difference of errors err_k - err_{k+1}
+    vec_diff = np.copy(vec)
+    vec_diff[1:] -= vec_diff[:-1]
+    
     #find sign of vector
-    sign = np.sign(vec)
+    sign = np.sign(vec_diff)
     #shift 0's (no difference) to positive)
     sign[sign==0] = 1
     
