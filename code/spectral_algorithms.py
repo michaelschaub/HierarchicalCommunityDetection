@@ -17,103 +17,59 @@ from scipy.signal import argrelextrema
 from sys import stdout
 
 
-def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe', reps=10, noise=1e-3):
+def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe', reps=10, noise=1e-3, use_likelihood=False):
 
     # initial spectral clustering, performed according to method 'first pass'
     p0 = spectral_partition(A,mode=first_pass,num_groups=-1)
 
     # agglomerate builds list of all partitions
-    pvec_agg = hier_spectral_partition_agglomerate(A,p0, mode=method_agg, reps=reps, noise=noise)
-    # print "Aggregation RESULTS:"
-    # print pvec_agg
-    # print "\n\n"
-    #~ pvec_tot = expand_partitions_to_full_graph(pvec_agg)
-
-    #~ return pvec_tot, pvec_agg
+    pvec_agg = hier_spectral_partition_agglomerate(A,p0, mode=method_agg, reps=reps, noise=noise, use_likelihood=use_likelihood)
+    
     return pvec_agg
 
 
-def hier_spectral_partition_zoom_in(A, partition, mode='Bethe', zgroups = -1):
-    """
-    Given a A graph and an initial partition, try to find the best possible refinement
-    of this partition by recursively splitting each block according to a chosen method.
-    Return the finest possible partition found in this way.
-    """
-
-    # find number of communities in present partition
-    nc = np.max(partition)+1
-
-    keep_looping = True
-    print "RECURSIVE SPLITTING"
-    while keep_looping:
-
-        # highest index of a group in the global partition
-        max_k = -1
-        # new global partition vector
-        pvec = np.zeros_like(partition)
-
-        for ii in xrange(nc):
-            # split graph into subparts
-            Anew = A[:,partition==ii]
-            Anew = Anew[partition==ii,:]
-
-            # get a partition for each subpart
-            pnew = spectral_partition(Anew,mode,zgroups)
-
-            # if this is the first partition we look at just assign it
-            if max_k == -1:
-                pvec[partition==ii] = pnew
-                max_k = pvec.max()
-            # if it is not the first, the indices need to start at max_k + 1
-            else:
-                pvec[partition==ii] = pnew + max_k + 1
-                max_k = pvec.max()
-
-        # if there has been a change in the partition compared to before, this means
-        # we found a recursive split and we should keep going
-        if np.any(partition != pvec):
-            print "RECURSIVE SPLIT FOUND", pvec.max()+1, "groups"
-            partition = pvec
-            nc = pvec.max() + 1
-        # no change? stop trying to refine
-        else:
-            keep_looping = False
-
-    return partition
-
-
-def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise=1e-3):
+def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise=1e-3, use_likelihood=False):
     """Performs hierarchical agglomeration of adjacency matrix and provided partition,
         based on the provided mode parameter"""
     
     pvec = []
     pvec.append(partition)
 
-    k = np.max(partition)+1
-    k0 =k
-    print "HIER SPECTRAL PARITION -- agglomerative\n Initial partition into", k0, "groups \n"
+    k = np.max(partition)
     
-    Ks, hier_partition_vecs = identify_hierarchy(A,max_k=k0,mode='SBM',reg=False, norm='F', threshold=0, reps=reps, noise=noise)
+    print "HIER SPECTRAL PARTITION -- agglomerative\n Initial partition into", k+1, "groups \n"
     
-    pvec.extend(hier_partition_vecs)
+    Ks=np.arange(k)
     
-    return pvec
+    levels = [k+1]
     
-    #~ while k > 1:
-        #~ links_between_groups, possible_links_between_groups = compute_number_links_between_groups(A,partition)
-        #~ A = links_between_groups
-        #~ # print "Aggregated network:"
-        #~ # print links_between_groups
-        #~ if mode == "Lap":
-            #~ k, partition, H, error = identify_hierarchy(links_between_groups,method=thresh_method)
-        #~ else:
-            #~ pass
-        #~ if partition is not None:
-            #~ pvec.append(partition)
-
-        #~ print '\n\n\n LEVELS \n', len(pvec), '\n\n\n'
-
-    #~ return pvec
+    while len(Ks)>0:
+        
+        Eagg, Nagg = compute_number_links_between_groups(A,partition)
+        Aagg = Eagg / Nagg
+        
+        Ks, hier_partition_vecs = identify_next_level(Aagg,max_k=k,mode='SBM',reg=False, norm='F', threshold=1/3, reps=reps, noise=noise)
+        
+        
+        try:
+            pvec.append(hier_partition_vecs[0])
+            
+            partition = expand_partitions_to_full_graph(pvec)[-1]
+            
+            k=Ks[0]-1
+            levels.append(k+1)
+            print 'partition into', k+1 ,' groups'
+            if k==1:
+                Ks=[]
+        #this exception occurs when there is only a single candidate partition and the error is not high enough.
+        except IndexError:
+            pass
+            
+    
+    print "HIER SPECTRAL PARTITION -- agglomerative\n Partitions into", levels, "groups \n"
+    
+    return expand_partitions_to_full_graph(pvec)[::-1]
+    
 
 
 def spectral_partition(A, mode='Lap', num_groups=2, regularizer='BHa'):
@@ -491,180 +447,107 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
-def identify_hierarchy(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=0, reps=0, noise=1e-3):
+def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3, reps=10, noise=1e-3):
     
-    noise=1e-1
+    #determine set of candidate k's
+    if max_k == -1:
+        max_k = A_.shape[0]
+    Ks=np.arange(max_k,1,-1)
     
     #first identify partitions and their projection error 
-    partition_vecs, sum_errors = identify_partitions_and_errors(A,max_k,mode,reg, norm,partition_vecs=[])
-    Ks=np.arange(max_k-1,1,-1)
-    print 'sum_errors',zip(Ks[sum_errors<0],sum_errors[sum_errors<0])
-    
-    #~ levels_ = np.intersect1d(argrelextrema(sum_errors, np.less)[0], (sum_errors<0).nonzero()[0])
-    levels_ = find_local_minima(sum_errors)
-    
+    Ks, sum_errors, partition_vecs = identify_partitions_and_errors(A,Ks,mode,reg, norm,partition_vecs=[])
     
     #repeat with noise
     if reps>0:
-        rvs = scipy.stats.norm(0, noise).rvs
-        n=A.shape[0]
-        m=A.nnz
         
         sum_errors = 0
+        std_errors = 0.
+        m = 0.
         
         for rep in xrange(reps):
-            nnoise=scipy.sparse.random(n,n,m/(n*n),data_rvs=rvs)
-            print nnoise.nnz, nnoise.sum()
-            A_noisy=A+nnoise
-            _, errors = identify_partitions_and_errors(A_noisy,max_k,mode,reg, norm,partition_vecs)
+            Anew = add_noise_to_small_matrix(A, snr=noise)
+            _, errors, _ = identify_partitions_and_errors(Anew,Ks,mode,reg, norm,partition_vecs)
             sum_errors+=errors
-    
+            
+            #calculate online variance 
+            m_prev = m
+            m = m + (errors - m) / (reps+1)
+            std_errors = std_errors + (errors - m) * (errors - m_prev)
+            
+            
         sum_errors/=reps
     
-    print find_local_minima(sum_errors)
-    #~ levels = np.intersect1d(argrelextrema(sum_errors, np.less)[0], (sum_errors<0).nonzero()[0])
+    std_errors=np.sqrt(std_errors)
+    #find errors below threshold 
+    below_thresh = (sum_errors<threshold) 
+    
+    #difference of errors err_k - err_{k+1}
+    sum_errors[1:] -= sum_errors[:-1]
+    
     levels = find_local_minima(sum_errors)
+    print levels
+    print below_thresh.nonzero()[0]
+    levels = np.intersect1d(levels,below_thresh.nonzero()[0])
     print 'sum_errors',zip(Ks[sum_errors<0],sum_errors[sum_errors<0])
-    print 'Levels inferred=',len(levels_), Ks[levels_]
-    print 'plus errors'
-    print 'Levels inferred=',len(levels), Ks[levels]
+    print 'sum_errors',zip(Ks[below_thresh],sum_errors[below_thresh])
+    #~ print 'std_errors',zip(Ks[sum_errors<0],std_errors[sum_errors<0])
+    print 'Levels inferred=',len(levels), Ks[levels], sum_errors[levels], std_errors[levels]
     hier_partition_vecs=[partition_vecs[si] for si in levels]
     return Ks[levels], hier_partition_vecs
     
 
-def find_local_minima(vec):
-    sign_diff = np.diff(np.sign(vec))
-    goes_neg = (sign_diff==-2).nonzero()[0]+1
-    goes_pos = (sign_diff==2).nonzero()[0]+1
-    
-    #sometimes there are no sign changes
-    try:
-        if goes_neg[0]<goes_pos[0]:
-            segments = zip(goes_neg, goes_pos)
-        else:
-            segments = zip(np.append(0,goes_neg), goes_pos)
-    except IndexError:
-        return np.array([np.argmin(vec)])
-    
-    minima=[]
-    
-    for seg in segments:
-        minima.append(seg[0]+np.argmin(vec[seg[0]:seg[1]]))
-    
-    return np.array(minima)
+
 
     
-def identify_partitions_and_errors(A,max_k=-1,mode='SBM',reg=False, norm='F',partition_vecs=[]):
-    if max_k == -1:
-        max_k = A.shape[0]
-
-    ## first construct Laplacian and find eigenvectors
-    #TODO: this is not a Laplacian but the normalized adjacency of Rohe et al..
+def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition_vecs=[]):
+    max_k = Ks[0]
+    
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
     if reg:
         # set tau to average degree
         tau = A.sum()/A.shape[0]
     else:
         tau = 0
-
-    ## input A may be a sparse scipy matrix or dense format numpy 2d array.
+    
+    # get eigenvectors
+    # input A may be a sparse scipy matrix or dense format numpy 2d array.
     sparse_input = False
     try:
         ev, evecs = scipy.linalg.eigh(L)
     except ValueError:
         print L.shape, max_k
-        ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='LM')
+        ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM')
         sparse_input = True
     index = np.argsort(np.abs(ev))
     evecs = evecs[:,index[::-1]]
-    print "START AGGLOMERATION PHASE"
-
-    prev_partition_vec, prev_H = find_partition(evecs, max_k, tau, norm, mode, Dtau_sqrt_inv)
-    prev_error = calculate_proj_error(evecs, prev_H, norm)/np.sqrt(max_k)
-    #~ errors = [(max_k,prev_error)]
-    errors = []
     
-    #indicate if partitions have been specified
+    #initialise errors
+    error = np.zeros(len(Ks))
+    #check if partitions are known
     partitions_unknown= partition_vecs==[]
     
-    # find partitions and projection errors
-    for ki,k in enumerate(xrange(max_k-1,1,-1)):
+    #find partitions and their error for each k
+    for ki,k in enumerate(Ks):
         if partitions_unknown:
-            partition_vec, H = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
-        else:
-            #~ partition_vec, H = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
+            partition_vec, Hnorm = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
+        else :
             partition_vec = partition_vecs[ki]
-            H=create_normed_partition_matrix_from_vector(partition_vec,mode)
-        error = calculate_proj_error(evecs, H, norm)/np.sqrt(k) - prev_error
-        errors.append(error)
-        prev_error += error
+            Hnorm = create_normed_partition_matrix_from_vector(partition_vec,mode)
+        
+        #calculate and store error
+        error[ki] = calculate_proj_error(evecs, Hnorm, norm)
+        #~ print("K, error ")
+        #~ print(k, error[ki])
+        
+        #save partition
         if partitions_unknown:
             partition_vecs.append(partition_vec)
     
-    return partition_vecs, np.array(errors)
+    return Ks, error, partition_vecs
 
 
 
-#Possibly deprecated
-def identify_hierarchy_in_affinity_matrix(Omega,mode='SBM',reg=False, norm='F',method='analytic'):
-
-    #TODO: we might want to adjust this later on
-    thres = 0.05
-
-    if method=='bootstrap':
-        norm='2'
-        thres=0.005
-
-    max_k = Omega.shape[0]
-
-
-    L, Dtau_sqrt_inv = construct_normalised_Laplacian(Omega, reg)
-    if reg:
-        # set tau to average degree
-        tau = Omega.sum()/Omega.shape[0]
-    else:
-        tau = 0
-
-    #TODO: this is not a Laplacian but the normalized adjacency of Rohe et al..
-    ev, evecs = scipy.linalg.eigh(L)
-    index = np.argsort(np.abs(ev))
-    evecs = evecs[:,index[::-1]]
-    print "START AGGLOMERATION PHASE"
-    # print "evec_sorted"
-    # print evecs
-
-    for k in xrange(max_k-1,1,-1):
-        partition_vec, H = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
-        error = calculate_proj_error(evecs, H, norm)
-
-        if method=='analytic':
-            print "K, error, error/max_k, error /k, error/sqrt(max_k), error/sqrt(k), thres "
-            print k, error, error/max_k, error/k, error/np.sqrt(max_k), error/np.sqrt(k), thres
-            # Note that this should always be fulfilled at k=1
-            if error/ np.sqrt(max_k)  < thres:
-                print "Agglomerated into " + str(k) + " groups \n\n"
-                return k, partition_vec, H, error
-        elif method=='bootstrap':
-            #~ null_dist = bootstrap_null_projection_error(H,Omega,k,reg,norm,mode)
-            null_dist = bootstrap_null_projection_error(evecs,partition_vec,Omega,k,reg,norm,mode)
-            pval=np.sum(error>=null_dist)/len(null_dist)
-            print 'K',k,'error:',error, 'p-val', pval
-            print 'Null dist:',np.percentile(null_dist,[0,25,50,75,100])
-            if pval< thres:
-                print "Agglomerated into " + str(k) + " groups \n\n"
-                return k, partition_vec, H, error
-        else:
-            error('something went wrong. Please specify valid mode')
-
-    partition_vec = None
-    H = -1
-    k = 0
-    error = -1
-    print "Final agglomeration -- no \n"
-    return k , partition_vec, H, error
-
-
-def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv):
+def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv, method='QR', n_init=20):
     V = evecs[:,:k]
     if mode == 'DCSBM':
         X = preprocessing.normalize(V, axis=1, norm='l2')
@@ -674,32 +557,35 @@ def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv):
 
     else:
         error('something went wrong. Please specify valid mode')
-
-    clust = KMeans(n_clusters = k)
-    clust.fit(X)
-    partition_vec = clust.labels_
-    partition_vec = relabel_partition_vec(partition_vec)
+    
+    #select methof of clustering - QR or KM (k-means)
+    if method=='QR':
+        partition_vec = clusterEVwithQR(X)
+    elif method=='KM':
+        clust = KMeans(n_clusters = k, n_init=n_init)
+        clust.fit(X)
+        partition_vec = clust.labels_
+        partition_vec = relabel_partition_vec(partition_vec)
+    else:
+        error('something went wrong. Please specify valid clustering method')
     H = create_normed_partition_matrix_from_vector(partition_vec,mode)
     
-    ## MOVED TO HELPER FUNCTION ABOVE
-    #~ if mode == 'DCSBM':
-        #~ Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1)+tau).flatten())
-        #~ H = Dtau_sqrt.dot(H)
-    #~ # normalize column norm to 1 of the partition indicator matrices
-    #~ H = preprocessing.normalize(H,axis=0,norm='l2')
-
     return partition_vec, H
 
+
 def calculate_proj_error(evecs,H,norm):
-    k = np.shape(H)[1]
+    n, k = np.shape(H)
+    if n == k:
+        error =0
+        return error
     V = evecs[:,:k]
     proj1 = project_orthogonal_to(H,V)
     proj2 = project_orthogonal_to(V,H)
-
+    
     if norm == 'F':
-        norm1 = scipy.linalg.norm(proj1)
-        norm2 = scipy.linalg.norm(proj2)
-        error = 0.5*(norm1+norm2)/np.sqrt(k)
+        norm1 = scipy.linalg.norm(proj1)/np.sqrt(k-k**2/n)
+        norm2 = scipy.linalg.norm(proj2)/np.sqrt(k-k**2/n)
+        error = 0.5*(norm1+norm2)
     elif norm == '2':
         norm1 = scipy.linalg.norm(proj1,2)
         norm2 = scipy.linalg.norm(proj2,2)
@@ -979,3 +865,77 @@ def expand_partitions_to_full_graph(pvecs):
         pvec_new.append(partition)
 
     return pvec_new
+
+def find_local_minima(vec):
+    #find sign of vector
+    sign = np.sign(vec)
+    #shift 0's (no difference) to positive)
+    sign[sign==0] = 1
+    
+    sign_diff = np.diff(sign)
+    goes_neg = (sign_diff==-2).nonzero()[0]+1
+    goes_pos = (sign_diff==2).nonzero()[0]+1
+    
+    print "VEC", vec
+    print sign_diff
+    print goes_neg
+    print goes_pos
+    
+    #sometimes there are no sign changes
+    try:
+        if goes_neg[0]<goes_pos[0]:
+            segments = zip(goes_neg, goes_pos)
+            if len(goes_neg)>len(goes_pos):
+                segments.append((goes_neg[-1],len(vec)))
+        else:
+            segments = zip(np.append(0,goes_neg), goes_pos)
+    except IndexError:
+        print "IndexError, caught"
+        if np.min(vec)<0:
+            return np.array([np.argmin(vec)])
+        else:
+            return np.array([],dtype=int)
+    
+    minima=[]
+    print "SEG", segments
+    
+    for seg in segments:
+        minima.append(seg[0]+np.argmin(vec[seg[0]:seg[1]]))
+    
+    return np.array(minima)
+
+"""Add some small random noise to a (dense) small matrix as a perturbation"""
+def add_noise_to_small_matrix(M,snr=0.001,noise_type="gaussian"):
+
+    #noise level is taken relative to the Froebenius norm
+    normM = scipy.linalg.norm(M)
+
+    if noise_type == "uniform":
+        #TODO -- should we have uniform noise?
+        pass
+    elif noise_type == "gaussian":
+        n,m = M.shape
+        noise = scipy.triu(scipy.random.randn(n,m))
+        noise = noise + noise.T -scipy.diag(scipy.diag(noise))
+        normNoise = scipy.linalg.norm(noise)
+        Mp = M + snr*normM/normNoise*noise
+
+    return Mp
+
+def xlogy(x,y):
+    """ compute x log(y) elementwise, with the convention that 0log0 = 0"""
+    xlogy = x*np.log(y)
+    xlogy[np.isinf(xlogy)] = 0
+    xlogy[np.isnan(xlogy)] = 0
+    return xlogy
+
+def compute_likelihood_SBM(pvec,A,omega=None):
+    H = create_partition_matrix_from_vector(pvec)
+    # self-loops and directedness is not allowed here
+    Emat, Nmat = compute_number_links_between_groups(A,pvec,directed=False)
+    if omega is None:
+        omega = Emat / Nmat
+
+    logPmat = xlogy(Emat,omega) + xlogy(Nmat-Emat,1 - omega)
+    likelihood = logPmat.sum()
+    return likelihood
