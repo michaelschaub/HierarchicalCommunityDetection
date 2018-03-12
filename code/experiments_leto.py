@@ -125,7 +125,7 @@ def model_select(groups_per_level=3,n_levels=3,snr=20):
     for ri in xrange(5):
         for use_likelihood in [False]:
             #infer partitions with no noise
-            inf_pvec = spectral.hier_spectral_partition(A, reps=20, use_likelihood=use_likelihood)
+            inf_pvec = spectral.hier_spectral_partition(A, reps=20)
             
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
             precision, recall = metrics.calculate_precision_recall(score_matrix)

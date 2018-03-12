@@ -52,7 +52,7 @@ def complete_inf(symmetric=True):
             print [len(np.unique(pv)) for pv in true_pvec]
             print [len(np.unique(pv)) for pv in inf_pvec]
             
-            with open('results/complete_inf_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric]),'a') as file:
+            with open('results/complete_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in inf_pvec:
                     file.write(' {}'.format(len(np.unique(lvl))))
@@ -61,12 +61,55 @@ def complete_inf(symmetric=True):
 
 
 def plot_complete(symmetric=True):
-    
-    with open('results/complete_inf_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric])) as file:
+    groups_per_level=3
+    n_levels=3
+    with open('results/complete_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
         results = file.readlines()
     
-    result
+    scores = np.float64([result.split('*')[0].split() for result in results])
     
+    snrs = np.unique(scores[:,0])
+    n = len(snrs)
+    precision = np.empty(n)
+    recall = np.empty(n)
+    overlap = np.empty(n)
+    levels = np.empty(n)
+    
+    for si,snr in enumerate(snrs):
+        idxs = scores[:,0]==snr
+        #~ print snr,idxs, (scores[idxs,1])
+        precision[si] = np.mean(scores[idxs,1])
+        recall[si] = np.mean(scores[idxs,2])
+        overlap[si] = np.mean(scores[idxs,3])
+        levels[si] = np.mean(scores[idxs,4])
+    
+    #plot precision recall
     plt.figure()
+    plt.plot(snrs, precision, label='precision')
+    plt.plot(snrs, recall, label='recall')
+    plt.axvline(1,ls=':',color='k',lw=0.5)
+    plt.axhline(0,color='k',lw=0.5)
+    plt.legend()
+    plt.tight_layout()
+    
+    fig, ax1 = plt.subplots()
+    color = 'tab:blue'    
+    ax1.plot(snrs, overlap, label='overlap',color=color)
+    ax1.set_ylabel('overlap',color=color)
+    ax1.set_xlabel('SNR')
+    ax1.tick_params(axis='y', labelcolor=color)
+    
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+    
+    color = 'tab:orange'
+    ax2.plot(snrs, levels, '*', label='levels',color=color)
+    ax2.set_ylabel('# levels',color=color)
+    ax2.tick_params(axis='y', labelcolor=color)
+    
+    plt.axvline(1,ls=':',color='k',lw=0.5)
+    plt.axhline(0,color='k',lw=0.5)
+    
+    plt.tight_layout()
+    
     
     

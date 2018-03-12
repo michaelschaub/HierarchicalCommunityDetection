@@ -45,10 +45,11 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise
 
     print "HIER SPECTRAL PARTITION -- agglomerative\n Initial partition into", k+1, "groups \n"
 
-   # Ks stores the candidate levels in inverse order, levels is a list accounting for the 'k' values at which agglomerations were performed
+   # Ks stores the candidate levels in inverse order
+   # Note: set to min 1 group, as no agglomeration required when only 2 groups are detected.
     Ks=np.arange(k,1,-1)
     
-
+    # levels is a list of 'k' values of each level in the inferred hierarchy
     levels = [k+1]
     while len(Ks)>0:
 
@@ -488,16 +489,13 @@ def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3
     #find errors below threshold 
     below_thresh = (sum_errors<threshold) 
     
-    #~ #difference of errors err_k - err_{k+1}
-    #~ sum_errors[1:] -= sum_errors[:-1]
     
     levels = find_local_minima(sum_errors)
-    print levels, levels2
     print below_thresh.nonzero()[0]
-    levels = np.intersect1d(levels2,below_thresh.nonzero()[0])
-    print 'sum_errors',zip(Ks[sum_errors<0],sum_errors[sum_errors<0])
+    print 'sum_errors',zip(Ks[levels],sum_errors[levels])
     print 'sum_errors',zip(Ks[below_thresh],sum_errors[below_thresh])
-    #~ print 'std_errors',zip(Ks[sum_errors<0],std_errors[sum_errors<0])
+    #choose only local minima that are below threshold
+    levels = np.intersect1d(levels,below_thresh.nonzero()[0])
     print 'Levels inferred=',len(levels), Ks[levels], sum_errors[levels], std_errors[levels]
     hier_partition_vecs=[partition_vecs[si] for si in levels]
     return Ks[levels], hier_partition_vecs
@@ -507,11 +505,7 @@ def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3
 
 
 def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition_vecs=[]):
-    try:
-        max_k = Ks[0]
-    except IndexError:
-        print "\n\nKS",Ks,"\n\n"
-        print afasd
+    max_k = Ks[0]
     
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
     if reg:
@@ -884,7 +878,7 @@ def find_local_minima(vec):
     
     #find sign of vector
     sign = np.sign(vec_diff)
-    #shift 0's (no difference) to positive)
+    #shift 0's (no difference) to positive
     sign[sign==0] = 1
 
     sign_diff = np.diff(sign)
@@ -892,6 +886,7 @@ def find_local_minima(vec):
     goes_pos = (sign_diff==2).nonzero()[0]+1
 
     print "VEC", vec
+    print vec_diff
     print sign_diff
     print goes_neg
     print goes_pos
@@ -904,10 +899,14 @@ def find_local_minima(vec):
                 segments.append((goes_neg[-1],len(vec)))
         else:
             segments = zip(np.append(0,goes_neg), goes_pos)
+    #catches no sign or single sign change
     except IndexError:
-        print "IndexError, caught"
-        if np.min(vec)<0:
+        print "IndexError dues to <=1 sign change"
+        #check if the minimum corresponds to a local minimum
+        #i.e. does min of vec correspond to -ve in vec_diff
+        if vec_diff[np.argmin(vec)]<0:
             return np.array([np.argmin(vec)])
+        #otherwise return empty set
         else:
             return np.array([],dtype=int)
 
