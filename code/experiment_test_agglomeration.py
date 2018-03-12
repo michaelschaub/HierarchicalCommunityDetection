@@ -505,12 +505,12 @@ def test_agglomeration_ideas(groups_per_level=3):
     plt.title("likelihood")
     return D_actual
 
-def test_agglomeration_ideas_noise_pert(groups_per_level=4):
+def test_agglomeration_ideas_noise_pert(groups_per_level=2):
     # n=2**13
     n=4**7
     snr=7
     c_bar=50
-    n_levels=3
+    n_levels=4
 
     max_k = groups_per_level**n_levels
     norm = 'F'
@@ -548,12 +548,14 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=4):
         reg= False
         # normalized Laplacian is D^-1/2 A D^-1/2
         L, Dtau_sqrt_inv = spectral.construct_normalised_Laplacian(Aagg,reg)
+        D = scipy.sparse.diags(np.array(Aagg.sum(1)).flatten(),0)
+        L = D - Aagg
         tau = 0
         ev, evecs = scipy.linalg.eigh(L)
 
         index = np.argsort(np.abs(ev))
-        evecs = evecs[:,index[::-1]]
-        sigma = np.abs(ev[index[::-1]])
+        evecs = evecs[:,index[::1]]
+        sigma = np.abs(ev[index[::1]])
 
         # evecs = evecs[:,index]
         # plt.figure()
