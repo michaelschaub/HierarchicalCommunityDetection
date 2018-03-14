@@ -6,6 +6,7 @@ import scipy.sparse
 import scipy.sparse.linalg as linalg
 import networkx as nx
 from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering
 from sklearn import preprocessing
 from sklearn import mixture
 from matplotlib import pyplot as plt
@@ -20,19 +21,33 @@ from sys import stdout
 # mode parameter in identify_next_level -- SBM or DCSBM?
 
 
-def hier_spectral_partition(A,method_agg='Lap',method_zoom='Bethe',first_pass='Bethe', reps=10, noise=1e-3):
-
-    # initial spectral clustering, performed according to method 'first pass'
-    p0 = spectral_partition(A,mode=first_pass,num_groups=-1)
-
+def hier_spectral_partition(A,spectral_oper='Lap',first_pass='Bethe', model='SBM', reps=10, noise=1e-3, Ks=None):
+    
+    # if Ks is not specified then perform complete infernce
+    if Ks is None:
+        # initial spectral clustering, performed according to method 'first pass'
+        p0 = spectral_partition(A,spectral_oper=first_pass,num_groups=-1)
+        Ks=[]
+        Ks.append(np.max(p0)+1)
+        #~ p0 = spectral_partition(A,spectral_oper=spectral_oper,num_groups=Ks[0])
+    #otherwise Ks specifies partition sizes for each level (or just finest level if length 1) from finest to coarsest 
+    #~ else:
+    p0 = spectral_partition(A,spectral_oper=spectral_oper,num_groups=Ks[0])
+    
+    # if Ks only specifies starting partition then set to none
+    if len(Ks)==1:
+        Ks=None
+    else:
+        Ks=Ks[1:]
+    
     # agglomerate builds list of all partitions
-    pvec_agg = hier_spectral_partition_agglomerate(A,p0, mode=method_agg, reps=reps, noise=noise)
+    pvec_agg = hier_spectral_partition_agglomerate(A,p0, spectral_oper=spectral_oper, model=model, reps=reps, noise=noise, Ks=Ks)
     
 
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise=1e-3):
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=10, noise=1e-3, Ks=None):
     """Performs hierarchical agglomeration of adjacency matrix and provided partition,
         based on the provided mode parameter"""
 
@@ -47,22 +62,34 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise
 
    # Ks stores the candidate levels in inverse order
    # Note: set to min 1 group, as no agglomeration required when only 2 groups are detected.
-    Ks=np.arange(k,1,-1)
+    if Ks is None:
+        Ks=np.arange(k,1,-1)
+        find_levels = True
+    else:
+        find_levels = False
     
     # levels is a list of 'k' values of each level in the inferred hierarchy
     levels = [k+1]
     while len(Ks)>0:
-
+    
         Eagg, Nagg = compute_number_links_between_groups(A,partition)
         Aagg = Eagg / Nagg
-        Ks, hier_partition_vecs = identify_next_level(Aagg,max_k=k,mode='SBM',reg=False, norm='F', threshold=1/3, reps=reps, noise=noise)
-
+        
+        if find_levels:
+            Ks, hier_partition_vecs = identify_next_level(Aagg,Ks,model=model,reg=False, norm='F', threshold=1/3, reps=reps, noise=noise)
+        else:
+            Ks, hier_partition_vecs = identify_partitions_at_level(Aagg,Ks,model=model,reg=False, norm='F')
+            
         try:
+            
             pvec.append(hier_partition_vecs[0])
             partition = expand_partitions_to_full_graph(pvec)[-1]
 
             k=Ks[0]-1
             levels.append(k+1)
+            #if levels are not prespecified, reset candidates
+            if find_levels:
+                Ks = np.arange(k,1,-1)
             print 'partition into', k+1 ,' groups'
             if k==1:
                 Ks=[]
@@ -79,7 +106,7 @@ def hier_spectral_partition_agglomerate(A, partition, mode="Lap", reps=10, noise
 
 
 
-def spectral_partition(A, mode='Lap', num_groups=2, regularizer='BHa'):
+def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
     """ Perform one round of spectral clustering for a given network matrix A
     Inputs: A -- input adjacency matrix
             mode -- variant of spectral clustering to use (Laplacian, Bethe Hessian,
@@ -90,20 +117,20 @@ def spectral_partition(A, mode='Lap', num_groups=2, regularizer='BHa'):
             Output: partition_vec -- clustering of the nodes
     """
 
-    if   mode == "Lap":
+    if   spectral_oper == "Lap":
         if num_groups != -1:
             partition, _ = regularized_laplacian_spectral_clustering(A,num_groups=num_groups)
 
-    elif mode == "Bethe":
+    elif spectral_oper == "Bethe":
         partition = cluster_with_BetheHessian(A,num_groups=num_groups,mode='unweighted', regularizer=regularizer)
 
-    elif mode == "NonBack":
+    elif spectral_oper == "NonBack":
         pass
 
-    elif mode == "XLaplacian":
+    elif spectral_oper == "XLaplacian":
         pass
 
-    elif mode == "SeidelLap":
+    elif spectral_oper == "SeidelLap":
         if num_groups != -1:
             partition, _ = cluster_with_SLaplacian_simple(A,num_groups=num_groups)
         else:
@@ -455,15 +482,15 @@ def build_non_backtracking_matrix(A,mode='unweighted'):
 ##################################################
 
 
-def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3, reps=10, noise=1e-3):
+def identify_next_level(A,Ks, model='SBM',reg=False, norm='F', threshold=1/3, reps=10, noise=1e-3):
 
     #determine set of candidate k's
-    if max_k == -1:
-        max_k = A_.shape[0]
-    Ks=np.arange(max_k,1,-1)
+    #~ if max_k == -1:
+        #~ max_k = A_.shape[0]
+    #~ Ks=np.arange(max_k,1,-1)
 
     #first identify partitions and their projection error
-    Ks, sum_errors, partition_vecs = identify_partitions_and_errors(A,Ks,mode,reg, norm,partition_vecs=[])
+    Ks, sum_errors, partition_vecs = identify_partitions_and_errors(A,Ks,model,reg, norm,partition_vecs=[])
 
     #repeat with noise
     if reps>0:
@@ -474,7 +501,7 @@ def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3
 
         for rep in xrange(reps):
             Anew = add_noise_to_small_matrix(A, snr=noise)
-            _, errors, _ = identify_partitions_and_errors(Anew,Ks,mode,reg, norm,partition_vecs)
+            _, errors, _ = identify_partitions_and_errors(Anew,Ks,model,reg, norm,partition_vecs)
             sum_errors+=errors
 
             #calculate online variance
@@ -501,10 +528,35 @@ def identify_next_level(A,max_k=-1,mode='SBM',reg=False, norm='F', threshold=1/3
     return Ks[levels], hier_partition_vecs
 
 
+def identify_partitions_at_level(A,Ks,model='SBM',reg=False, norm='F'):
+    L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
+    if reg:
+        # set tau to average degree
+        tau = A.sum()/A.shape[0]
+    else:
+        tau = 0
+
+    # get eigenvectors
+    # input A may be a sparse scipy matrix or dense format numpy 2d array.
+    sparse_input = False
+    try:
+        ev, evecs = scipy.linalg.eigh(L)
+    except ValueError:
+        ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM')
+        sparse_input = True
+    index = np.argsort(np.abs(ev))
+    evecs = evecs[:,index[::-1]]
+    
+    pvecs = []
+    #find partitions and their error for each k
+    
+    partition_vec, Hnorm = find_partition(evecs, Ks[0], tau, norm, model, Dtau_sqrt_inv)
+    
+    return Ks[1:], [partition_vec]
+    
 
 
-
-def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition_vecs=[]):
+def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partition_vecs=[]):
     max_k = Ks[0]
     
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
@@ -534,10 +586,10 @@ def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition
     #find partitions and their error for each k
     for ki,k in enumerate(Ks):
         if partitions_unknown:
-            partition_vec, Hnorm = find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv)
+            partition_vec, Hnorm = find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv)
         else :
             partition_vec = partition_vecs[ki]
-            Hnorm = create_normed_partition_matrix_from_vector(partition_vec,mode)
+            Hnorm = create_normed_partition_matrix_from_vector(partition_vec,model)
         
         #calculate and store error
         error[ki] = calculate_proj_error(evecs, Hnorm, norm)
@@ -552,12 +604,12 @@ def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition
 
 
 
-def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv, method='QR', n_init=20):
+def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='QR', n_init=20):
     V = evecs[:,:k]
-    if mode == 'DCSBM':
+    if model == 'DCSBM':
         X = preprocessing.normalize(V, axis=1, norm='l2')
 
-    elif mode == 'SBM':
+    elif model == 'SBM':
         X = Dtau_sqrt_inv* V
 
     else:
@@ -573,7 +625,7 @@ def find_partition(evecs, k, tau, norm, mode, Dtau_sqrt_inv, method='QR', n_init
         partition_vec = relabel_partition_vec(partition_vec)
     else:
         error('something went wrong. Please specify valid clustering method')
-    H = create_normed_partition_matrix_from_vector(partition_vec,mode)
+    H = create_normed_partition_matrix_from_vector(partition_vec,model)
 
     return partition_vec, H
 
