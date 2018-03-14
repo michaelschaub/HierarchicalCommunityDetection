@@ -6,18 +6,16 @@ import metrics
 from matplotlib import pyplot as plt
 plt.ion()
 
-def complete_inf(symmetric=True):
-    
-    groups_per_level=3
-    n_levels=3
+def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
     
     n=3**9
     
     c_bar=50
     
-    for rep in xrange(20):
+    for rep in xrange(200):
     
         for snr in np.arange(0.5,10.5,0.5):
+        #~ for snr in np.arange(10,0,-0.5):
             
             print 'SNR',snr
             
@@ -25,13 +23,19 @@ def complete_inf(symmetric=True):
                 D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
                 
             else :
-                pass
+                D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=False)
             
             #generate graph and create adjacency
             G=D_actual.generateNetworkExactProb()
             A=D_actual.to_scipy_sparse_matrix(G)
             #get true hierarchy
             true_pvec = D_actual.get_partition_all()
+            #~ plt.figure()
+            #~ plt.spy(A,markersize=2e-2)
+            #~ print A.nnz
+            #~ for tp in true_pvec:
+                #~ plt.plot(tp)
+                #~ print np.unique(tp)
 
             #infer partitions with no noise
             inf_pvec = spectral.hier_spectral_partition(A, reps=20)
@@ -60,9 +64,9 @@ def complete_inf(symmetric=True):
 
 
 
-def plot_complete(symmetric=True):
-    groups_per_level=3
-    n_levels=3
+def plot_complete(symmetric=True, groups_per_level=3, n_levels=3):
+    #~ groups_per_level=3
+    #~ n_levels=3
     with open('results/complete_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
         results = file.readlines()
     

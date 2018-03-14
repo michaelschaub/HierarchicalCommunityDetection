@@ -538,7 +538,7 @@ def identify_partitions_and_errors(A,Ks,mode='SBM',reg=False, norm='F',partition
         else :
             partition_vec = partition_vecs[ki]
             Hnorm = create_normed_partition_matrix_from_vector(partition_vec,mode)
-
+        
         #calculate and store error
         error[ki] = calculate_proj_error(evecs, Hnorm, norm)
         #~ print("K, error ")

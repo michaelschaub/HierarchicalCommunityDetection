@@ -97,19 +97,23 @@ class GHRG(nx.DiGraph):
             #create ordered list of child nodes
             self.node[node]['children']=self.successors(node)
             self.node[node]['children'].sort()
-
+            if not self.node[node].has_key('level'):
+                self.node[node]['level'] = level
+            
+            #~ print "LEVEL, # children\n", level, node, len(self.node[node]['children']), node in self.leaf_nodes
+            
             if self.directed:
 
                 for ci,childi in enumerate(self.node[node]['children']):
                     for cj,childj in enumerate(self.node[node]['children']):
                         if ci != cj:
                             self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
-                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
+                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[self.node[node]['level']][ci,cj]
 
                 if node in self.leaf_nodes:
                     #~ print ci,cj
                     self.node[node]['Nr'] = np.array([[self.node[node]['n']*self.node[node]['n']]])
-                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
+                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[self.node[node]['level']-1][ci,ci]]])
 
             else:
 
@@ -117,12 +121,22 @@ class GHRG(nx.DiGraph):
                     for cj,childj in enumerate(self.node[node]['children'][ci:],ci):
                         if ci != cj:
                             self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
-                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
+                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[self.node[node]['level']][ci,cj]
 
                 if node in self.leaf_nodes:
                     #~ print ci,cj
                     self.node[node]['Nr'] = (np.array([[self.node[node]['n']*self.node[node]['n']]])- self.node[node]['n'])/2
-                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
+                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[self.node[node]['level']-1][ci,ci]]])
+                    
+                    #~ parent = self.node[node]['ancestor']
+                    #~ if len(self.node[parent]['children'])==1:
+                        #~ print "YES"
+                    
+                if len(self.node[node]['children'])==1:
+                    self.node[self.node[node]['children'][0]]['level'] = self.node[node]['level']
+                    #~ print "children",self.node[node]['children']
+                #~ print self.node[node]['level'] 
+                
 
     def setLeafNodeOrder(self):
         """

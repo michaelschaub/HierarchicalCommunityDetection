@@ -30,7 +30,7 @@ def calculateDegreesFromAvDegAndSNR(SNR,av_degree,num_cluster=2):
 
 
 
-def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
+def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=True):
     """
     Function to create a test GHRG for simulations
     parameters:
@@ -59,6 +59,7 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
         if np.floor(n_this_level) != n_this_level:
             print "Rounding number of nodes"
         c_bar=(cin/n_this_level)*(n_this_level / float(groups_per_level))
+        #~ print omega[level]
 
 
     D=GHRGmodel.GHRG()
@@ -87,6 +88,95 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
     for nl in xrange(n_levels-1):
         nodes_last_level=list(nodes_this_level)
         nodes_this_level=[]
+        for pi,parent in enumerate(nodes_last_level):
+            if symmetric:
+                children=D.add_children(parent, groups_per_level)
+            elif pi==0:
+                children=D.add_children(parent, groups_per_level)
+            else:
+                children=D.add_children(parent, 1)
+            nodes_this_level.extend(children)
+
+            #create local view of network node assignment
+            level_n=len(D.node[parent]['nnodes'])
+            for ci,child in enumerate(children):
+                if symmetric:
+                    D.node[child]['nnodes'] = D.node[D.predecessors(child)[0]]['nnodes'][int(ci*level_n/groups_per_level):int((ci+1)*level_n/groups_per_level)]
+                    D.node[child]['n'] = len(D.node[child]['nnodes'])
+                elif pi==0:
+                    D.node[child]['nnodes'] = D.node[D.predecessors(child)[0]]['nnodes'][int(ci*level_n/groups_per_level):int((ci+1)*level_n/groups_per_level)]
+                    D.node[child]['n'] = len(D.node[child]['nnodes'])
+                else :
+                    D.node[child]['nnodes'] = D.node[D.predecessors(child)[0]]['nnodes']#[int(ci*level_n/groups_per_level):int((ci+1)*level_n/groups_per_level)]
+                    D.node[child]['n'] = len(D.node[child]['nnodes'])
+
+    D.setLeafNodeOrder()
+    D.setParameters(omega)
+
+    return D
+
+
+
+#TEST FUNCTION
+def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
+    """
+    Function to create a test GHRG for simulations
+    parameters:
+        n   : number of nodes
+        snr : signal to noise ratio (1 represents theoretical detectability threshold)
+        c_bar : average degree
+        n_levels    : depth of GHRG
+        groups_per_level     : number of groups at each level
+    """
+
+    #interaction probabilities
+    omega={}
+    n_this_level = n
+    for level in xrange(n_levels):
+        # cin, cout = calculateDegrees(cm,ratio,groups_per_level)
+        #~ cin, cout = sample_networks.calculateDegreesFromSNR(snr,ratio,groups_per_level)
+        cin, cout = calculateDegreesFromAvDegAndSNR(snr,c_bar,groups_per_level)
+        print "Hierarchy Level: ", level, '| KS Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n_this_level,cout/n_this_level
+        # Omega is assigned on a block level, i.e. for each level we have one omega array
+        # this assumes a perfect hierarchy with equal depth everywhere
+        omega[level] = np.ones((groups_per_level,groups_per_level))*cout/n_this_level + np.eye(groups_per_level)*(cin/n_this_level-cout/n_this_level)
+        if np.any(omega[level]>=1):
+            print "no probability > 1 not allowed"
+            raise ValueError("Something wrong")
+        n_this_level = n_this_level / float(groups_per_level)
+        if np.floor(n_this_level) != n_this_level:
+            print "Rounding number of nodes"
+        c_bar=(cin/n_this_level)*(n_this_level / float(groups_per_level))
+        print omega[level]
+
+
+    D=GHRGmodel.GHRG()
+
+    #network_nodes contains an ordered list of the network nodes
+    # order is important so that we can efficiently create views at each
+    # internal dendrogram node
+    D.network_nodes = np.arange(n)
+    D.directed = False
+    D.self_loops = False
+
+    # create root node and store attribues of graph in it
+    # this corresponds to an unclustered graph
+    D.root_node = 0
+    D.add_node(D.root_node, Er=np.zeros((groups_per_level,groups_per_level)), Nr=np.zeros((groups_per_level,groups_per_level)))
+    D.node[D.root_node]['nnodes'] = D.network_nodes[:]
+    D.node[D.root_node]['n'] = n
+
+    # split network into groups -- add children in dendrogram
+    nodes_this_level = D.add_children(D.root_node, groups_per_level)
+    for ci, child in enumerate(nodes_this_level):
+        D.node[child]['nnodes'] = D.node[D.root_node]['nnodes'][int(ci*n/groups_per_level):int((ci+1)*n/groups_per_level)]
+        D.node[child]['n'] = len(D.node[child]['nnodes'])
+
+    #construct dendrogram breadth first
+    for nl in xrange(n_levels-1):
+        print nodes_this_level
+        nodes_last_level=list([nodes_this_level[0]])
+        nodes_this_level=[]
         for parent in nodes_last_level:
             children=D.add_children(parent, groups_per_level)
             nodes_this_level.extend(children)
@@ -101,6 +191,7 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
     D.setParameters(omega)
 
     return D
+
 
 
 def createNonSymmetric2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,combine_groups):
