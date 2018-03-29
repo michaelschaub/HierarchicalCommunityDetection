@@ -27,9 +27,6 @@ def calculateDegreesFromAvDegAndSNR(SNR,av_degree,num_cluster=2):
 
     return a, b
 
-
-
-
 def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=True):
     """
     Function to create a test GHRG for simulations
@@ -45,8 +42,6 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=True):
     omega={}
     n_this_level = n
     for level in xrange(n_levels):
-        # cin, cout = calculateDegrees(cm,ratio,groups_per_level)
-        #~ cin, cout = sample_networks.calculateDegreesFromSNR(snr,ratio,groups_per_level)
         cin, cout = calculateDegreesFromAvDegAndSNR(snr,c_bar,groups_per_level)
         print "Hierarchy Level: ", level, '| KS Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n_this_level,cout/n_this_level
         # Omega is assigned on a block level, i.e. for each level we have one omega array
@@ -115,9 +110,6 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=True):
 
     return D
 
-
-
-#TEST FUNCTION
 def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
     """
     Function to create a test GHRG for simulations
@@ -191,28 +183,3 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
     D.setParameters(omega)
 
     return D
-
-
-
-def createNonSymmetric2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,combine_groups):
-    """Create a non-symmetic version of a hierarchical model.
-       Do this by first creating a balanced hierarchical model and then aggregating and
-       averaging the groups defined in the vector 'combine_groups' which refers to the
-       groups at the lowest level.
-
-       This should (approximately) preserve the detectability of the model as specified
-       via the snr in the orginal symmetric and homogeneous model.
-
-       Example:
-       Consider a hier model with 3x3 groups, and combine_groups=[[0,1,2],[3,4]].
-       This would result in a model in which the first group is now 'flat', and within
-       the second group with heterogeneous group sizes.
-    """
-    D = create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
-
-    for combination in combine_groups:
-        root_node = G.find_closest_common_ancestor(combination)
-        # merge_nodes_below_root()
-
-def merge_nodes_below_root():
-    pass

@@ -106,6 +106,8 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
 
     return expand_partitions_to_full_graph(pvec)[::-1]
 
+
+
 def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
     """ Perform one round of spectral clustering for a given network matrix A
     Inputs: A -- input adjacency matrix
@@ -301,6 +303,182 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
 
     return partition_vector
 
+##########################################
+# X LAPLACIAN
+##########################################
+def cluster_with_XLaplacian(A, number_groups, learning_rate=5):
+    X = 0
+    LX = A + X
+    thres = 1/A.shape[0]
+    has_converged = False
+
+    while has_converged:
+        Iratio_max = -999
+        index_max = -1
+        ev, evecs = scipy.sparse.linalg.eigsh(LX,number_groups,'LA')
+        for i in np.arange(number_groups):
+            Iratio = inverse_participation_ratio(evecs[:,i])
+            if Iratio > Iratio_max:
+                Iratio_max = Iratio
+                index_max = i
+
+        if Iratio_max < thres:
+            has_converged = True
+
+        else:
+            X = X - learning_rate*scipy.sparse.diags(np.power(evecs[:,index_max],2))
+            LX = A+X
+
+    clust = KMeans(n_clusters = num_groups)
+    clust.fit(evecs)
+    partition_vector = clust.labels_
+
+    return partition_vector, evecs
+
+
+def inverse_participation_ratio(vec):
+    return np.power(vec,4).sum()
+
+
+##########################################
+# SEIDEL LAPLACIAN
+##########################################
+def create_seidel_lap_operator(A,rho=None):
+    if not scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+
+    n = A.shape[0]
+    I = scipy.sparse.diags(np.ones(n),0)
+    d = A.sum(axis=1).A.flatten().astype(float)
+    if rho==None:
+        rho = d.mean()/n
+    dtot = d*(1-rho) + rho * (n-1)
+    Ds_invs = scipy.sparse.diags(np.power(dtot,-0.5),0)
+
+    def seidel_lap_mat_vec(x):
+        mv = x - (1+rho)*Ds_invs*A*Ds_invs*x - rho*Ds_invs*Ds_invs*x
+        mv += Ds_invs*scipy.ones(n)*(scipy.ones(n)*Ds_invs*x)
+        return mv
+
+    LS = LinearOperator((n,n),matvec=seidel_lap_mat_vec)
+    return LS, Ds_invs
+
+
+def cluster_with_SLaplacian_simple(A,num_groups,rho=None):
+    # compute eigenvalues and eigenvectors (sorted according to smallest)
+    L, _ = create_seidel_lap_operator(A)
+    ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='SA')
+
+    clust = KMeans(n_clusters = num_groups)
+    clust.fit(evecs)
+    partition_vector = clust.labels_
+
+    return partition_vector, evecs
+
+def cluster_with_SLaplacian_and_model_select(A,num_groups,rho=None,max_k=16,mode='SBM'):
+    # compute eigenvalues and eigenvectors (sorted according to smallest)
+    L, Ds_invs = create_seidel_lap_operator(A)
+    ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='SA')
+    print ev
+
+    print "START MODEL SELECTION PHASE"
+
+    n = L.shape[0]
+    error = np.zeros(max_k)
+
+    #TODO: check all these cases carefully!
+    for k in xrange(1,max_k):
+        if mode == 'DCSBM':
+            error("NOT FULLY DEVELOPED YET!!")
+            pass
+
+        elif mode == 'SBM':
+            V = evecs[:,:k]
+            # print "V"
+            # print V, V.shape
+            X = preprocessing.normalize(V, axis=1, norm='l2')
+            clust = KMeans(n_clusters = k)
+            clust.fit(X)
+            partition_vec = clust.labels_
+            partition_vec = relabel_partition_vec(partition_vec)
+            # print partition_vec
+
+            H = create_partition_matrix_from_vector(partition_vec)
+            H = Ds_invs.dot(H)
+            H = preprocessing.normalize(H,axis=0,norm='l2')
+        else:
+            error('something went wrong. Please specify valid mode')
+
+        proj1 = project_orthogonal_to(H,V)
+        proj2 = project_orthogonal_to(V,H)
+        norm1 = scipy.linalg.norm(proj1)
+        norm2 = scipy.linalg.norm(proj2)
+        # print norm1, norm2
+        e = 0.5*(norm1+norm2)
+        # print "K, error: "
+        # print k, e
+        error[k]=e
+
+    local_min = argrelextrema(error,np.less)
+    print local_min[-1]
+    if local_min is None:
+        return 1, None, None, None
+    else:
+        kbest = local_min[-1][-1]
+        V = evecs[:,:kbest]
+        X = preprocessing.normalize(V, axis=1, norm='l2')
+        clust = KMeans(n_clusters = kbest)
+        clust.fit(X)
+        partition_vec = clust.labels_
+        partition_vec = relabel_partition_vec(partition_vec)
+        H = create_partition_matrix_from_vector(partition_vec)
+
+        return kbest, partition_vec, H, error[kbest]
+
+
+##########################################
+# NON-BACKTRACKING matrix
+##########################################
+
+def build_non_backtracking_matrix(A,mode='unweighted'):
+    """Build non-backtracking matrix as defined in Krzakala et al 2013:
+    Starting from a similarity matrix (adjacency) matrix s(u,v), we have
+         B(u>v;w>x) = s(u,v) if v = w and u != x, and 0 otherwise
+            (weighted_end setting, column weighting)
+         B(u>v;w>x) = s(w,x) if v = w and u != x, and 0 otherwise
+            (weighted_start setting, row weighting)
+    """
+    if not scipy.sparse.issparse(A):
+        print "Input matrix not in sparse format, transforming to sparse matrix"
+        A = scipy.sparse.csr_matrix(A)
+
+    edgelist = A.nonzero()
+    weights = A.data
+    number_edges = weights.size
+
+    start_node = edgelist[0]
+    end_node = edgelist[1]
+
+    NodeToEdgeIncidenceMatrixStart = scipy.sparse.csr_matrix((np.ones_like(start_node),(start_node,np.arange(number_edges))))
+    NodeToEdgeIncidenceMatrixEnd =  scipy.sparse.csr_matrix((np.ones_like(end_node),(end_node,np.arange(number_edges))))
+
+    # Line Graph connecting all edge points with start points
+    BT = NodeToEdgeIncidenceMatrixEnd.T*NodeToEdgeIncidenceMatrixStart
+
+    # Backtracking links are the only ones that are symmetric
+    BT = BT - BT.multiply(BT.T)
+
+    if mode == 'weighted_start':
+        BT = scipy.sparse.diags(weights,0)*BT
+    elif mode == 'weighted_end':
+        BT = BT*scipy.sparse.diags(weights,0)
+    elif mode != 'unweighted':
+        print "no valid mode specified"
+        return -1
+
+    return BT
+
 ##################################################
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
@@ -351,6 +529,7 @@ def identify_next_level(A,Ks, model='SBM',reg=False, norm='F', threshold=1/3, re
     hier_partition_vecs=[partition_vecs[si] for si in levels]
     return Ks[levels], hier_partition_vecs
 
+
 def identify_partitions_at_level(A,Ks,model='SBM',reg=False, norm='F'):
     L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
     if reg:
@@ -376,6 +555,8 @@ def identify_partitions_at_level(A,Ks,model='SBM',reg=False, norm='F'):
     partition_vec, Hnorm = find_partition(evecs, Ks[0], tau, norm, model, Dtau_sqrt_inv)
 
     return Ks[1:], [partition_vec]
+
+
 
 def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partition_vecs=[]):
     max_k = Ks[0]
@@ -423,6 +604,8 @@ def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partitio
 
     return Ks, error, partition_vecs
 
+
+
 def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='QR', n_init=20):
     V = evecs[:,:k]
     if model == 'DCSBM':
@@ -447,6 +630,7 @@ def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='QR', n_ini
     H = create_normed_partition_matrix_from_vector(partition_vec,model)
 
     return partition_vec, H
+
 
 def calculate_proj_error(evecs,H,norm):
     n, k = np.shape(H)
@@ -525,6 +709,8 @@ def clusterEVwithQR(EV, randomized=False, gamma=4):
 
     return cluster_
 
+
+
 def orthogonalizeQR(EV):
     """Given a set of eigenvectors V coming from a operator associated to the SBM,
     use QR decomposition as described in Damle et al 2017, to compute new coordinate
@@ -544,6 +730,7 @@ def orthogonalizeQR(EV):
     Z = EV.dot(EV[P,:].T)
 
     return Z, Q
+
 
 def orthogonalizeQR_randomized(EV,gamma=4):
     """Given a set of eigenvectors V coming from a operator associated to the SBM,
@@ -591,6 +778,7 @@ def relabel_partition_vec(pvec):
     pvec = remap[pvec]
     return pvec
 
+
 def find_negative_eigenvectors(M):
     """
     Given a matrix M, find all the eigenvectors associated to negative eigenvalues
@@ -629,6 +817,7 @@ def create_normed_partition_matrix_from_vector(partition_vec,mode):
     # normalize column norm to 1 of the partition indicator matrices
     return preprocessing.normalize(H,axis=0,norm='l2')
 
+
 def find_relevant_eigenvectors_Le_Levina(A, t=5):
     """ Find the relevant eigenvectors (of the Bethe Hessian) using the criteria proposed
         by Le and Levina (2015)
@@ -661,12 +850,15 @@ def find_relevant_eigenvectors_Le_Levina(A, t=5):
 
     return ev_BH_pos[:kmax], X
 
+
+
 def test_sparse_and_transform(A):
     """ Check if matrix is sparse and if not, return it as sparse matrix"""
     if not scipy.sparse.issparse(A):
         print "Input matrix not in sparse format, transforming to sparse matrix"
         A = scipy.sparse.csr_matrix(A)
     return A
+
 
 def compute_number_links_between_groups(A,partition_vec,directed=True):
     """
