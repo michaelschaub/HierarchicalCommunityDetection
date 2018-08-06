@@ -4,8 +4,16 @@ from scipy import sparse
 import scipy
 from scipy.optimize import linear_sum_assignment
 
-#calculate a distance matrix based on variation of information
+"""
+The metrics module computes various comparisons and scores of alignment between different
+sets of partitions.
+"""
+
+
 def calcVI(partitions):
+    """
+    Giveen a list of partitions calculate the variation of information distance matrix between all the partitions.
+    """
 
     num_partitions,n=np.shape(partitions)
     nodes = np.arange(n)
@@ -102,11 +110,11 @@ def calculate_precision_recall(score_matrix):
 def compare_levels(true_pvec,inf_pvec):
     true_levels = [len(np.unique(pv)) for pv in true_pvec]
     inf_levels = np.array([len(np.unique(pv)) for pv in inf_pvec])
-    
+
     match = [np.argmin(np.abs(inf_levels-tl)) for tl in true_levels]
     diff = [inf_levels[mi]-tl for mi,tl in zip(match,true_levels)]
     return diff
-    
+
 
 
 def create_partition_matrix_from_vector(partition_vec):

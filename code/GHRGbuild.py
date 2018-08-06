@@ -6,6 +6,12 @@ import networkx as nx
 
 
 def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
+    """
+    Given a particular signal to noise ratio (SNR), a ratio of in- vs out-link probabilities and a number of clusters,
+    compute the degree parameters for a planted partition model.
+
+    Output:  degree parameters a, b, such that the probability for an 'inside' connection is a/n, and for an outside connection b/n.
+    """
     # SNR a= in-weight, b = out-weight
     # SNR = (a-b)^2 / (ka + k(k-1)*b)
     # fix SNR and b =r*a
@@ -18,6 +24,12 @@ def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
     return a, b
 
 def calculateDegreesFromAvDegAndSNR(SNR,av_degree,num_cluster=2):
+    """
+    Given a particular signal to noise ratio (SNR), the average degree and a number of clusters,
+    compute the degree parameters for a planted partition model.
+
+    Output:  degree parameters a, b, such that the probability for an 'inside' connection is a/n, and for an outside connection b/n.
+    """
     # SNR, a= in-weight, b = out-weight
     # SNR = (a-b)^2 / (ka + k(k-1)*b) = (a-b)^2 / [k^2 *av_degree]
     # av_degree = a/k + (k-1)*b/k = a-b /k + b
@@ -29,8 +41,8 @@ def calculateDegreesFromAvDegAndSNR(SNR,av_degree,num_cluster=2):
 
 def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=True):
     """
-    Function to create a test GHRG for simulations
-    parameters:
+    Function to create a test GHRG for simulations.
+    Parameters:
         n   : number of nodes
         snr : signal to noise ratio (1 represents theoretical detectability threshold)
         c_bar : average degree
@@ -112,8 +124,8 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=True):
 
 def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
     """
-    Function to create a test GHRG for simulations
-    parameters:
+    Function to create an asymmetric test GHRG for simulations
+    Parameters:
         n   : number of nodes
         snr : signal to noise ratio (1 represents theoretical detectability threshold)
         c_bar : average degree

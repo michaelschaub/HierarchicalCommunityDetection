@@ -7,24 +7,24 @@ from matplotlib import pyplot as plt
 plt.ion()
 
 def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
-    
+
     n=3**9
-    
+
     c_bar=50
-    
+
     for rep in xrange(20):
-    
+
         for snr in np.arange(0.5,10.5,0.5):
         #~ for snr in np.arange(10,0,-0.5):
-            
+
             print 'SNR',snr
-            
+
             if symmetric:
                 D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
-                
+
             else :
                 D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=False)
-            
+
             #generate graph and create adjacency
             G=D_actual.generateNetworkExactProb()
             A=D_actual.to_scipy_sparse_matrix(G)
@@ -39,7 +39,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
 
             #infer partitions with no noise
             inf_pvec = spectral.hier_spectral_partition(A, reps=20)
-            
+
             #calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
             precision, recall = metrics.calculate_precision_recall(score_matrix)
@@ -51,11 +51,11 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
             print diff_levels
             print "precision, recall"
             print precision, recall
-            
-            
+
+
             print [len(np.unique(pv)) for pv in true_pvec]
             print [len(np.unique(pv)) for pv in inf_pvec]
-            
+
             with open('results/complete_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in inf_pvec:
@@ -65,36 +65,36 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
 
 
 def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM'):
-    
+
     n=3**9
-    
+
     c_bar=50
-    
-    for rep in xrange(200):
-    
+
+    for rep in xrange(20):
+
         for snr in np.arange(0.5,10.5,0.5):
         #~ for snr in np.arange(10,0,-0.5):
-            
+
             print 'SNR',snr
-            
+
             if symmetric:
                 D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
-                
+
             else :
                 D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=False)
-            
+
             #generate graph and create adjacency
             G=D_actual.generateNetworkExactProb()
             A=D_actual.to_scipy_sparse_matrix(G)
             #get true hierarchy
             true_pvec = D_actual.get_partition_all()
-            
+
             Ks = np.array([len(np.unique(pv)) for pv in true_pvec])[::-1]
             print 'Ks',Ks
-            
+
             #infer partitions with no noise
             inf_pvec = spectral.hier_spectral_partition(A, Ks=Ks, model=model)
-            
+
             #calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
             precision, recall = metrics.calculate_precision_recall(score_matrix)
@@ -106,11 +106,11 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM'):
             print diff_levels
             print "precision, recall"
             print precision, recall
-            
-            
+
+
             print [len(np.unique(pv)) for pv in true_pvec]
             print [len(np.unique(pv)) for pv in inf_pvec]
-            
+
             with open('results/knownK_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in xrange(len(inf_pvec)):
@@ -124,9 +124,9 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3):
     #~ n_levels=3
     with open('results/knownK_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
         results = file.readlines()
-    
+
     scores = np.float64([result.strip().replace('*','').split() for result in results])
-    
+
     snrs = np.unique(scores[:,0])
     n = len(snrs)
     precision = np.empty(n)
@@ -135,7 +135,7 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3):
     overlap2 = np.empty(n)
     overlap3 = np.empty(n)
     levels = np.empty(n)
-    
+
     for si,snr in enumerate(snrs):
         idxs = scores[:,0]==snr
         #~ print snr,idxs, (scores[idxs,1])
@@ -145,7 +145,7 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3):
         overlap2[si] = np.mean(scores[idxs,6])
         overlap3[si] = np.mean(scores[idxs,7])
         levels[si] = np.mean(scores[idxs,4])
-    
+
     #plot level overlap
     plt.figure()
     plt.plot(snrs, overlap1, label='overlap 1')
@@ -163,16 +163,16 @@ def plot_complete(symmetric=True, groups_per_level=3, n_levels=3):
     #~ n_levels=3
     with open('results/complete_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
         results = file.readlines()
-    
+
     scores = np.float64([result.split('*')[0].split() for result in results])
-    
+
     snrs = np.unique(scores[:,0])
     n = len(snrs)
     precision = np.empty(n)
     recall = np.empty(n)
     overlap = np.empty(n)
     levels = np.empty(n)
-    
+
     for si,snr in enumerate(snrs):
         idxs = scores[:,0]==snr
         #~ print snr,idxs, (scores[idxs,1])
@@ -180,7 +180,7 @@ def plot_complete(symmetric=True, groups_per_level=3, n_levels=3):
         recall[si] = np.mean(scores[idxs,2])
         overlap[si] = np.mean(scores[idxs,3])
         levels[si] = np.mean(scores[idxs,4])
-    
+
     #plot precision recall
     plt.figure()
     plt.plot(snrs, precision, label='precision')
@@ -189,25 +189,25 @@ def plot_complete(symmetric=True, groups_per_level=3, n_levels=3):
     plt.axhline(0,color='k',lw=0.5)
     plt.legend()
     plt.tight_layout()
-    
+
     fig, ax1 = plt.subplots()
-    color = 'tab:blue'    
+    color = 'tab:blue'
     ax1.plot(snrs, overlap, label='overlap',color=color)
     ax1.set_ylabel('overlap',color=color)
     ax1.set_xlabel('SNR')
     ax1.tick_params(axis='y', labelcolor=color)
-    
+
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-    
+
     color = 'tab:orange'
     ax2.plot(snrs, levels, '*', label='levels',color=color)
     ax2.set_ylabel('# levels',color=color)
     ax2.tick_params(axis='y', labelcolor=color)
-    
+
     plt.axvline(1,ls=':',color='k',lw=0.5)
     plt.axhline(0,color='k',lw=0.5)
-    
+
     plt.tight_layout()
-    
-    
-    
+
+
+
