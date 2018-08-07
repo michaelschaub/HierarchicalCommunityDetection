@@ -23,6 +23,12 @@ from sklearn import mixture
 from helperfunctions import *
 
 def hier_spectral_partition(A,spectral_oper='Lap',first_pass='Bethe', model='SBM', reps=10, noise=1e-3, Ks=None):
+    """
+    Performs a full round of hierarchical spectral clustering using the configurations provided.
+    Ks is a list of the partition sizes at each level in inverse order (e.g. [27, 9, 3] for a hierarchical
+    split into 3 x 3 x 3 groups.
+    reps defines the number of sampples drawn in the bootstrap error test and noise the corresponding noise floor.
+    """
 
     # if Ks is not specified then perform complete infernce
     if Ks is None:
@@ -76,23 +82,24 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
     while len(Ks)>0:
 
         Eagg, Nagg = compute_number_links_between_groups(A,partition)
+        # TODO The normalization seems important for good results -- why?
         Aagg = Eagg / Nagg
 
         if find_levels:
             Ks, hier_partition_vecs = identify_next_level(Aagg,Ks,model=model,reg=False, norm='F', threshold=1/3, reps=reps, noise=noise)
         else:
+            k = Ks[0]-1
             Ks, hier_partition_vecs = identify_partitions_at_level(Aagg,Ks,model=model,reg=False, norm='F')
 
         try:
-
             pvec.append(hier_partition_vecs[0])
             partition = expand_partitions_to_full_graph(pvec)[-1]
 
-            k=Ks[0]-1
+            if find_levels:
+                k=Ks[0]-1
+                Ks = np.arange(k,1,-1)
             levels.append(k+1)
             #if levels are not prespecified, reset candidates
-            if find_levels:
-                Ks = np.arange(k,1,-1)
             print 'partition into', k+1 ,' groups'
             if k==1:
                 Ks=[]
@@ -149,13 +156,11 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1,clustermod
         # set tau to average degree
         tau = A.sum()/A.shape[0]
 
-    d = np.array(A.sum(axis=1)).flatten().astype(float)
-    Dtau_sqrt_inv = scipy.sparse.diags(np.power(d + tau,-.5),0)
-    L = Dtau_sqrt_inv.dot(A).dot(Dtau_sqrt_inv)
+    L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A,tau)
 
 
     # compute eigenvalues and eigenvectors (sorted according to magnitude first)
-    ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='LM')
+    ev, evecs = scipy.sparse.linalg.eigsh(L,num_groups,which='LM',tol=1e-6)
 
     if clustermode == 'kmeans':
         X = preprocessing.normalize(evecs, axis=1, norm='l2')
@@ -170,19 +175,44 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1,clustermod
     return partition_vector, evecs
 
 def construct_normalised_Laplacian(Omega, reg):
-
-    Omega = test_sparse_and_transform(Omega)
-    if reg:
-        # set tau to average degree
-        tau = Omega.sum()/Omega.shape[0]
+    """
+    Construct a normalized regularized Laplacian matrix from the input matrix Omega
+    Input reg can be bool in which case the default settings for regularization (yes/no)
+    are used or a float in which case the numerical values is used as a regularizer
+    """
+    if isinstance(reg,bool):
+        if reg:
+            # set tau to average degree
+            tau = Omega.sum()/Omega.shape[0]
+        else:
+            tau = 0
     else:
-        tau = 0
+        tau =reg
 
-    # construct normalised Laplacian
-    Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(Omega.sum(1)).flatten().astype(float) + tau,-.5),0)
-    L = Dtau_sqrt_inv.dot(Omega).dot(Dtau_sqrt_inv)
+    # construct normalised Laplacian either as sparse matrix or dense array depending on input
+    if scipy.sparse.issparse(Omega):
+        Dtau_sqrt_inv = scipy.sparse.diags(np.power(np.array(Omega.sum(1)).flatten().astype(float) + tau,-.5),0)
+        L = Dtau_sqrt_inv.dot(Omega).dot(Dtau_sqrt_inv)
+    else:
+        Dtau_sqrt_inv = scipy.diagflat(np.power(np.array(Omega.sum(1)).flatten().astype(float) + tau,-.5),0)
+        L = Dtau_sqrt_inv.dot(Omega).dot(Dtau_sqrt_inv)
 
-    return L, Dtau_sqrt_inv
+    return L, Dtau_sqrt_inv, tau
+
+def construct_graph_Laplacian(Omega):
+    """
+    Construct a Laplacian matrix from the input matrix Omega. Output can be a sparse
+    matrix or a dense array depending on input
+    """
+    # construct Laplacian either as sparse matrix or dense array depending on input
+    if scipy.sparse.issparse(Omega):
+        D = scipy.sparse.diags(Omega.sum(1).flatten().astype(float),0)
+        L = D - Omega
+    else:
+        D = scipy.diagflat(Omega.sum(1).flatten().astype(float),0)
+        L = D - Omega
+
+    return L
 
 ######################################
 # BETHE HESSIAN CLUSTERING
@@ -283,8 +313,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
         # TODO: note that we combine the eigenvectors of pos/negative BH and do not use
         # information about positive / negative assortativity here
         # find eigenvectors corresponding to the algebraically smallest (most neg.) eigenvalues
-        ev_pos, evecs_pos = scipy.sparse.linalg.eigsh(BH_pos,num_groups,which='SA')
-        ev_neg, evecs_neg = scipy.sparse.linalg.eigsh(BH_neg,num_groups,which='SA')
+        ev_pos, evecs_pos = scipy.sparse.linalg.eigsh(BH_pos,num_groups,which='SA',tol=1e-6)
+        ev_neg, evecs_neg = scipy.sparse.linalg.eigsh(BH_neg,num_groups,which='SA',tol=1e-6)
         ev_all = np.hstack([ev_pos, ev_neg])
         index = np.argsort(ev_all)
         X = np.hstack([evecs_pos,evecs_neg])
@@ -307,14 +337,45 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
 # SPECTRAL MODEL SELECTION VIA INVARIANT SUBSPACE
 ##################################################
 
+def identify_partitions_at_level(A,Ks,model='SBM',reg=False, norm='F'):
+    """
+    For a given graph with (weighted) adjacency matrix A and list of partition sizes to assess (Ks),
+    find the partition of a given size Ks[0] via the find_partition function using the model and regularization
+    provided.
+    """
+
+    # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
+    #TODO: check here
+    L = construct_graph_Laplacian(A)
+    Dtau_sqrt_inv = L
+    tau = 0
+
+    # get eigenvectors
+    # input A may be a sparse scipy matrix or dense format numpy 2d array.
+    sparse_input = False
+    try:
+        ev, evecs = scipy.linalg.eigh(L)
+    except ValueError:
+        # ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM',tol=1e-6)
+        #TODO: check here
+        ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='SM',tol=1e-6)
+        sparse_input = True
+
+    index = np.argsort(np.abs(ev))
+    #TODO: check here
+    # evecs = evecs[:,index[::-1]]
+    evecs = evecs[:,index]
+
+    # find the partition for Ks[0] groups
+    partition_vec, Hnorm = find_partition(evecs, Ks[0], tau, norm, model, Dtau_sqrt_inv)
+
+    return Ks[1:], [partition_vec]
+
 
 def identify_next_level(A,Ks, model='SBM',reg=False, norm='F', threshold=1/3, reps=10, noise=1e-3):
-    #TODO: better documentation of what this does / check that it does what we want
-
-    #determine set of candidate k's
-    #~ if max_k == -1:
-        #~ max_k = A_.shape[0]
-    #~ Ks=np.arange(max_k,1,-1)
+    """
+    Identify agglomeration levels by checking the projection errors and comparing the to a bootstrap
+    verstion of the same network"""
 
     #first identify partitions and their projection error
     Ks, sum_errors, partition_vecs = identify_partitions_and_errors(A,Ks,model,reg, norm,partition_vecs=[])
@@ -354,45 +415,17 @@ def identify_next_level(A,Ks, model='SBM',reg=False, norm='F', threshold=1/3, re
     hier_partition_vecs=[partition_vecs[si] for si in levels]
     return Ks[levels], hier_partition_vecs
 
-def identify_partitions_at_level(A,Ks,model='SBM',reg=False, norm='F'):
-    #TODO: better documentation of what this does / check that it does what we want
-
-    L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
-    if reg:
-        # set tau to average degree
-        tau = A.sum()/A.shape[0]
-    else:
-        tau = 0
-
-    # get eigenvectors
-    # input A may be a sparse scipy matrix or dense format numpy 2d array.
-    sparse_input = False
-    try:
-        ev, evecs = scipy.linalg.eigh(L)
-    except ValueError:
-        ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM')
-        sparse_input = True
-    index = np.argsort(np.abs(ev))
-    evecs = evecs[:,index[::-1]]
-
-    pvecs = []
-    #find partitions and their error for each k
-
-    partition_vec, Hnorm = find_partition(evecs, Ks[0], tau, norm, model, Dtau_sqrt_inv)
-
-    return Ks[1:], [partition_vec]
 
 def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partition_vecs=[]):
     #TODO: better documentation of what this does / check that it does what we want
 
     max_k = Ks[0]
 
-    L, Dtau_sqrt_inv = construct_normalised_Laplacian(A, reg)
-    if reg:
-        # set tau to average degree
-        tau = A.sum()/A.shape[0]
-    else:
-        tau = 0
+    #TODO: check here!
+    # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
+    L = construct_graph_Laplacian(A)
+    Dtau_sqrt_inv = L
+    tau = 0
 
     # get eigenvectors
     # input A may be a sparse scipy matrix or dense format numpy 2d array.
@@ -401,10 +434,14 @@ def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partitio
         ev, evecs = scipy.linalg.eigh(L)
     except ValueError:
         print L.shape, max_k
-        ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM')
+        # ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM',tol=1e-6)
+        #TODO: check here
+        ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='SM',tol=1e-6)
         sparse_input = True
     index = np.argsort(np.abs(ev))
-    evecs = evecs[:,index[::-1]]
+    #TODO: check here
+    # evecs = evecs[:,index[::-1]]
+    evecs = evecs[:,index]
 
     #initialise errors
     error = np.zeros(len(Ks))
@@ -430,15 +467,16 @@ def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partitio
 
     return Ks, error, partition_vecs
 
+
 def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='QR', n_init=20):
     """ Perform clustering in spectral embedding space according to various criteria"""
     V = evecs[:,:k]
+
     if model == 'DCSBM':
         X = preprocessing.normalize(V, axis=1, norm='l2')
-
     elif model == 'SBM':
-        X = Dtau_sqrt_inv* V
-
+        # X = Dtau_sqrt_inv* V
+        X = V
     else:
         error('something went wrong. Please specify valid mode')
 
@@ -452,6 +490,7 @@ def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='QR', n_ini
         partition_vec = relabel_partition_vec(partition_vec)
     else:
         error('something went wrong. Please specify valid clustering method')
+
     H = create_normed_partition_matrix_from_vector(partition_vec,model)
 
     return partition_vec, H
@@ -483,6 +522,8 @@ def project_orthogonal_to(subspace_basis,vectors_to_project):
     vectors that span the space orthogonal to which we want to project
     vectors_to_project: project these vectors into the orthogonal complement of the
     specified subspace
+
+    compute S*(S^T*S)^{-1}*S' * V
     """
 
     if not scipy.sparse.issparse(vectors_to_project):
@@ -495,7 +536,6 @@ def project_orthogonal_to(subspace_basis,vectors_to_project):
     else:
         S = subspace_basis
 
-    # compute S*(S^T*S)^{-1}*S'*V
     projected = S*scipy.sparse.linalg.spsolve(S.T*S,S.T*V)
 
     orthogonal_proj = V - projected
