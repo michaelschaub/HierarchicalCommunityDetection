@@ -55,7 +55,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"
             print [len(np.unique(pv)) for pv in true_pvec]
             print [len(np.unique(pv)) for pv in inf_pvec]
 
-            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
+            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a+') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in inf_pvec:
                     file.write(' {}'.format(len(np.unique(lvl))))
@@ -112,7 +112,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM',pr
             print [len(np.unique(pv)) for pv in inf_pvec]
             print "\n\nEND RESULTS\n\n"
 
-            with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
+            with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a+') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in xrange(len(inf_pvec)):
                     file.write(' {:.3f}'.format(score_matrix[lvl,lvl]))
