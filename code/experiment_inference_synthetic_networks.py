@@ -6,13 +6,13 @@ import metrics
 from matplotlib import pyplot as plt
 plt.ion()
 
-def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
+def complete_inf(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
 
     n=3**9
 
     c_bar=50
 
-    for rep in xrange(20):
+    for rep in xrange(50):
 
         for snr in np.arange(0.5,10.5,0.5):
 
@@ -55,7 +55,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
             print [len(np.unique(pv)) for pv in true_pvec]
             print [len(np.unique(pv)) for pv in inf_pvec]
 
-            with open('results/complete_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
+            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in inf_pvec:
                     file.write(' {}'.format(len(np.unique(lvl))))
@@ -63,7 +63,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3):
 
 
 
-def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM'):
+def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM',prefix="results"):
 
     n=3**9
 
@@ -112,7 +112,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM'):
             print [len(np.unique(pv)) for pv in inf_pvec]
             print "\n\nEND RESULTS\n\n"
 
-            with open('results/knownK_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
+            with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in xrange(len(inf_pvec)):
                     file.write(' {:.3f}'.format(score_matrix[lvl,lvl]))
@@ -120,10 +120,10 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM'):
 
 
 
-def plot_levels(symmetric=True, groups_per_level=3, n_levels=3):
+def plot_levels(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
     #~ groups_per_level=3
     #~ n_levels=3
-    with open('results/knownK_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
+    with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
         results = file.readlines()
 
     scores = np.float64([result.strip().replace('*','').split() for result in results])
@@ -159,10 +159,10 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3):
 
 
 
-def plot_complete(symmetric=True, groups_per_level=3, n_levels=3):
+def plot_complete(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
     #~ groups_per_level=3
     #~ n_levels=3
-    with open('results/complete_inf_{}_{}_{}.txt'.format({True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
+    with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
         results = file.readlines()
 
     scores = np.float64([result.split('*')[0].split() for result in results])
