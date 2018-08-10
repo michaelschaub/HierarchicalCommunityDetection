@@ -122,9 +122,10 @@ def create_partition_matrix_from_vector(partition_vec):
     Create a partition indicator matrix from a given vector; -1 entries in partition vector will
     be ignored and can be used to denote unasigned nodes.
     """
+    partition_vec = partition_vec.astype(int)
     nr_nodes = partition_vec.size
     #~ k=len(np.unique(partition_vec))
     k=np.max(partition_vec)+1 # changed to max value in case some groups are empty
 
-    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec)),shape=(nr_nodes,k)).tocsr()
+    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec.astype(int))),shape=(nr_nodes,k)).tocsr()
     return partition_matrix
