@@ -552,7 +552,7 @@ def clusterEVwithQR(EV, randomized=False, gamma=4):
     else:
         Z, Q = orthogonalizeQR(EV)
 
-    cluster_ = scipy.absolute(Z).argmax(axis=1)
+    cluster_ = scipy.absolute(Z).argmax(axis=1).astype(int)
 
     return cluster_
 
