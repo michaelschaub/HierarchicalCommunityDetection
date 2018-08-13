@@ -405,6 +405,8 @@ def identify_next_level(A,Ks, model='SBM',reg=False, norm='F', threshold=1/3, re
     below_thresh = (sum_errors<threshold)
 
 
+    #TODO: replace all of the below and the find minima function by using find peaks function!
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html#scipy.signal.find_peaks
     levels = find_local_minima(sum_errors)
     print below_thresh.nonzero()[0]
     print 'sum_errors',zip(Ks[levels],sum_errors[levels])
@@ -591,8 +593,8 @@ def orthogonalizeQR_randomized(EV,gamma=4):
     elements = np.arange(n)
     prob = (EV.T**2).sum(axis=0)
     probabilities = prob / prob.sum()
-    elements = np.random.choice(elements, count, p=probabilities)   #changed to np.random (since scipy.random is not a real module)
-    ellemens = scipy.unique(elements)
+    elements = np.random.choice(elements, count, p=probabilities)
+    elements = scipy.unique(elements)
 
 
     Q, R, P = scipy.linalg.qr(EV[elements,:].T, mode='economic', pivoting=True)

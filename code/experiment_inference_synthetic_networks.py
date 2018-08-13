@@ -119,6 +119,54 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM',pr
                 file.write('\n')
 
 
+def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
+
+    n=3**9
+
+    c_bar=50
+
+    for rep in xrange(50):
+
+        for snr in np.arange(0.5,10.5,0.5):
+
+            print 'SNR',snr
+
+            if symmetric:
+                D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
+
+            else :
+                D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=False)
+
+            #generate graph and create adjacency
+            G=D_actual.generateNetworkExactProb()
+            A=D_actual.to_scipy_sparse_matrix(G)
+            #get true hierarchy
+            true_pvec = D_actual.get_partition_all()
+
+            #infer partitions with no noise
+            inf_pvec = hier_spectral_partition_agglomerate(A,true_pvec)
+
+            #calculate scores
+            score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
+            precision, recall = metrics.calculate_precision_recall(score_matrix)
+            diff_levels = metrics.compare_levels(true_pvec,inf_pvec)
+            bottom_lvl = score_matrix[-1,-1]
+            print "\n\nRESULTS\n\nbottom level"
+            print bottom_lvl
+            print len(inf_pvec), len(true_pvec)
+            print diff_levels
+            print "precision, recall"
+            print precision, recall
+
+
+            print [len(np.unique(pv)) for pv in true_pvec]
+            print [len(np.unique(pv)) for pv in inf_pvec]
+
+            with open('results/{}_agglomerate_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a+') as file:
+                file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
+                for lvl in inf_pvec:
+                    file.write(' {}'.format(len(np.unique(lvl))))
+                file.write('\n')
 
 def plot_levels(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
     #~ groups_per_level=3
