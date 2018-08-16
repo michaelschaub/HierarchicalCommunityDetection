@@ -73,7 +73,7 @@ def infer_k_known(groups_per_level=3, n_levels=3, model='SBM', prefix="results")
 
             print 'SNR', snr
 
-            D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar,
+            D_actual = GHRGbuild.createAsymGHRG(n, snr, c_bar,
                                                       n_levels, groups_per_level)
 
 
@@ -124,7 +124,7 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
 
             print 'SNR',snr
 
-            D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
+            D_actual=GHRGbuild.createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level)
 
 
             #generate graph and create adjacency
