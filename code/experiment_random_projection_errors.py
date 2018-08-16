@@ -183,7 +183,7 @@ def test_random_projection(n=24,p=6):
     plt.errorbar(testdim,meanerror,stderror)
 
 
-def test_random_projection_with_kmeans(n=10):
+def test_random_projection_with_kmeans(n=30):
     nsamples = 20
 
     # second test

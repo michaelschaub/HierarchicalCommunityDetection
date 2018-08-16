@@ -6,7 +6,7 @@ import metrics
 from matplotlib import pyplot as plt
 plt.ion()
 
-def complete_inf(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
+def complete_inf(groups_per_level=3, n_levels=3,prefix="results"):
 
     n=3**9
 
@@ -17,12 +17,8 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"
         for snr in np.arange(0.5,10.5,0.5):
 
             print 'SNR',snr
+            D_actual=GHRGbuild.createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level)
 
-            if symmetric:
-                D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
-
-            else :
-                D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=False)
 
             #generate graph and create adjacency
             G=D_actual.generateNetworkExactProb()
@@ -55,7 +51,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"
             print [len(np.unique(pv)) for pv in true_pvec]
             print [len(np.unique(pv)) for pv in inf_pvec]
 
-            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a+') as file:
+            with open('results_asym/{}_complete_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level),'a+') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in inf_pvec:
                     file.write(' {}'.format(len(np.unique(lvl))))
@@ -63,28 +59,23 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"
 
 
 
-def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', prefix="results"):
+def infer_k_known(groups_per_level=3, n_levels=3, model='SBM', prefix="results"):
 
     n = 3**9
 
     c_bar = 50
 
-    # for rep in xrange(20):
-    for rep in xrange(10):
+    for rep in xrange(50):
+    # for rep in xrange(10):
 
         for snr in np.arange(0.5, 10.5, 0.5):
             # for snr in np.arange(0.5,10.5,1):
 
             print 'SNR', snr
 
-            if symmetric:
-                D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar,
+            D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar,
                                                       n_levels, groups_per_level)
 
-            else:
-                D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar,
-                                                      n_levels, groups_per_level,
-                                                      symmetric=False)
 
             # generate graph and create adjacency
             G = D_actual.generateNetworkExactProb()
@@ -114,7 +105,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', p
             print [len(np.unique(pv)) for pv in inf_pvec]
             print "\n\nEND RESULTS\n\n"
 
-            with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix, {True: 'sym', False: 'asym'}[symmetric], n_levels, groups_per_level), 'a+') as file:
+            with open('results_asym/{}_knownK_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level), 'a+') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr, precision, recall, bottom_lvl, len(inf_pvec)))
                 for lvl in xrange(len(inf_pvec)):
                     file.write(' {:.3f}'.format(score_matrix[lvl, lvl]))
@@ -133,11 +124,8 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
 
             print 'SNR',snr
 
-            if symmetric:
-                D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
+            D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
 
-            else :
-                D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=False)
 
             #generate graph and create adjacency
             G=D_actual.generateNetworkExactProb()
@@ -164,7 +152,7 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
             print [len(np.unique(pv)) for pv in true_pvec]
             print [len(np.unique(pv)) for pv in inf_pvec]
 
-            with open('results/{}_agglomerate_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level),'a+') as file:
+            with open('results_asym/{}_agglomerate_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level),'a+') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr,precision,recall,bottom_lvl,len(inf_pvec)))
                 for lvl in inf_pvec:
                     file.write(' {}'.format(len(np.unique(lvl))))
@@ -173,7 +161,7 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
 def plot_levels(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"):
     # ~ groups_per_level=3
     # ~ n_levels=3
-    with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix, {True: 'sym', False: 'asym'}[symmetric], n_levels, groups_per_level)) as file:
+    with open('results_asym/{}_knownK_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level)) as file:
         results = file.readlines()
 
     scores = np.float64([result.strip().replace('*', '').split() for result in results])
@@ -209,10 +197,10 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"
 
 
 
-def plot_complete(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
+def plot_complete(groups_per_level=3, n_levels=3,prefix="results"):
     #~ groups_per_level=3
     #~ n_levels=3
-    with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
+    with open('results_asym/{}_complete_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level)) as file:
         results = file.readlines()
 
     scores = np.float64([result.split('*')[0].split() for result in results])
