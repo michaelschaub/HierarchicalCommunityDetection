@@ -134,7 +134,7 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
             true_pvec = D_actual.get_partition_all()
 
             #infer partitions with no noise
-            inf_pvec = hier_spectral_partition_agglomerate(A,true_pvec)
+            inf_pvec = spectral.hier_spectral_partition_agglomerate(A,true_pvec[-1])
 
             #calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)

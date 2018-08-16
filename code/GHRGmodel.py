@@ -99,9 +99,9 @@ class GHRG(nx.DiGraph):
             self.node[node]['children'].sort()
             if not self.node[node].has_key('level'):
                 self.node[node]['level'] = level
-            
+
             #~ print "LEVEL, # children\n", level, node, len(self.node[node]['children']), node in self.leaf_nodes
-            
+
             if self.directed:
 
                 for ci,childi in enumerate(self.node[node]['children']):
@@ -127,16 +127,16 @@ class GHRG(nx.DiGraph):
                     #~ print ci,cj
                     self.node[node]['Nr'] = (np.array([[self.node[node]['n']*self.node[node]['n']]])- self.node[node]['n'])/2
                     self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[self.node[node]['level']-1][ci,ci]]])
-                    
+
                     #~ parent = self.node[node]['ancestor']
                     #~ if len(self.node[parent]['children'])==1:
                         #~ print "YES"
-                    
+
                 if len(self.node[node]['children'])==1:
                     self.node[self.node[node]['children'][0]]['level'] = self.node[node]['level']
                     #~ print "children",self.node[node]['children']
-                #~ print self.node[node]['level'] 
-                
+                #~ print self.node[node]['level']
+
 
     def setLeafNodeOrder(self):
         """
@@ -202,7 +202,7 @@ class GHRG(nx.DiGraph):
         """
 
         # global partition at root node
-        part_vector=np.zeros(self.node[self.root_node]['n'])
+        part_vector=np.zeros(self.node[self.root_node]['n'],dtype=int)
 
         nr_levels = nx.dag_longest_path_length(self)
         if level > nr_levels:
