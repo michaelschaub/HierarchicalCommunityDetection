@@ -133,6 +133,8 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
             #get true hierarchy
             true_pvec = D_actual.get_partition_all()
 
+            print true_pvec
+
             #infer partitions with no noise
             inf_pvec = spectral.hier_spectral_partition_agglomerate(A,true_pvec[-1])
 
@@ -197,11 +199,15 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"
 
 
 
-def plot_complete(groups_per_level=3, n_levels=3,prefix="results"):
+def plot_complete(groups_per_level=3, n_levels=3,prefix="results",mode='full'):
     #~ groups_per_level=3
     #~ n_levels=3
-    with open('results_asym/{}_complete_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level)) as file:
-        results = file.readlines()
+    if mode == "full":
+        with open('results_asym/{}_complete_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level)) as file:
+            results = file.readlines()
+    elif mode == "Agg":
+        with open('results_asym/{}_agglomerate_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level)) as file:
+            results = file.readlines()
 
     scores = np.float64([result.split('*')[0].split() for result in results])
 

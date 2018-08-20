@@ -347,7 +347,7 @@ def identify_partitions_at_level(A,Ks,model='SBM',reg=False, norm='F'):
     # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
     #TODO: check here
     L = construct_graph_Laplacian(A)
-    Dtau_sqrt_inv = L
+    Dtau_sqrt_inv = 0
     tau = 0
 
     # get eigenvectors
@@ -383,7 +383,7 @@ def identify_next_level(A,Ks, model='SBM',reg=False, norm='F', threshold=1/3, re
     #repeat with noise
     if reps>0:
 
-        sum_errors = 0
+        sum_errors = 0.
         std_errors = 0.
         m = 0.
 
@@ -419,7 +419,9 @@ def identify_next_level(A,Ks, model='SBM',reg=False, norm='F', threshold=1/3, re
 
 
 def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partition_vecs=[]):
-    #TODO: better documentation of what this does / check that it does what we want
+    """
+    Collect the partitions and projection errors found for a list Ks of 'putative' group numbers
+    """
 
     max_k = Ks[0]
 
@@ -436,9 +438,9 @@ def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partitio
         ev, evecs = scipy.linalg.eigh(L)
     except ValueError:
         print L.shape, max_k
-        # ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM',tol=1e-6)
+        # ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='LM',tol=1e-6)
         #TODO: check here
-        ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='SM',tol=1e-6)
+        ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='SM',tol=1e-6)
         sparse_input = True
     index = np.argsort(np.abs(ev))
     #TODO: check here

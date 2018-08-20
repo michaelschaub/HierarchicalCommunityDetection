@@ -214,9 +214,16 @@ class GHRG(nx.DiGraph):
         for current_level in range(level):
             current_level_dendro_nodes = []
             for parent in current_parent_nodes:
-                current_level_dendro_nodes = current_level_dendro_nodes + self.successors(parent)
+                if self.node[parent]['children'] != []:
+                    current_level_dendro_nodes = current_level_dendro_nodes + self.successors(parent)
+                else:
+                    current_level_dendro_nodes = current_level_dendro_nodes + [parent]
+                print "Current level nodes", current_level_dendro_nodes, "\n"
             current_parent_nodes = current_level_dendro_nodes
+            print "Current parents", current_parent_nodes, "\n"
+            print "2 Current level nodes", current_level_dendro_nodes, "\n"
 
+        print "3 Current level nodes", current_level_dendro_nodes, "\n"
         for ni, node in enumerate(current_parent_nodes):
             children=self.node[node]['nnodes']
             part_vector[children]=ni

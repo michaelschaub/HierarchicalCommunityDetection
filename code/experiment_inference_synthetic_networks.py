@@ -209,11 +209,15 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"
 
 
 
-def plot_complete(symmetric=True, groups_per_level=3, n_levels=3,prefix="results"):
+def plot_complete(symmetric=True, groups_per_level=3, n_levels=3,prefix="results",mode='full'):
     #~ groups_per_level=3
     #~ n_levels=3
-    with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
-        results = file.readlines()
+    if mode == "full":
+        with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix,{True : 'sym', False : 'asym'}[symmetric], n_levels, groups_per_level)) as file:
+            results = file.readlines()
+    elif mode == "Agg":
+        with open('results/{}_agglomerate_inf_{}_{}_{}.txt'.format(prefix, {True: 'sym', False: 'asym'}[symmetric], n_levels, groups_per_level)) as file:
+            results = file.readlines()
 
     scores = np.float64([result.split('*')[0].split() for result in results])
 
