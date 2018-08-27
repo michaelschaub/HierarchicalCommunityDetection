@@ -81,6 +81,9 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
     levels = [k+1]
     while len(Ks)>0:
 
+        print Ks
+        print A.shape
+
         Eagg, Nagg = compute_number_links_between_groups(A,partition)
         # TODO The normalization seems important for good results -- why?
         Aagg = Eagg / Nagg
@@ -143,7 +146,7 @@ def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
 # REGULARIZED SPECTRAL CLUSTERING (ROHE)
 ##########################################
 
-def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1,clustermode='kmeans'):
+def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1,clustermode='GMM',n_init=10):
     """
     Performs regularized spectral clustering based on Qin-Rohe 2013 using a normalized and
     regularized adjacency matrix (called Laplacian by Rohe et al)
@@ -165,11 +168,20 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1,clustermod
     if clustermode == 'kmeans':
         X = preprocessing.normalize(evecs, axis=1, norm='l2')
 
-        clust = KMeans(n_clusters = num_groups)
+        clust = KMeans(n_clusters = num_groups,n_init=n_init)
         clust.fit(X)
         partition_vector = clust.labels_
+
     elif clustermode == 'qr':
         partition_vector = clusterEVwithQR(evecs)
+
+    elif clustermode=='GMM':
+        X = preprocessing.normalize(evecs, axis=1, norm='l2')
+        GMM = mixture.GaussianMixture(n_components=num_groups, covariance_type='full',n_init=n_init)
+        GMM.fit(X)
+        partition_vector = GMM.predict(X)
+
+    partition_vector = relabel_partition_vec(partition_vector)
 
 
     return partition_vector, evecs
@@ -472,7 +484,7 @@ def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partitio
     return Ks, error, partition_vecs
 
 
-def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='QR', n_init=20):
+def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='GMM', n_init=20):
     """ Perform clustering in spectral embedding space according to various criteria"""
     V = evecs[:,:k]
 
@@ -491,6 +503,11 @@ def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='QR', n_ini
         clust = KMeans(n_clusters = k, n_init=n_init)
         clust.fit(X)
         partition_vec = clust.labels_
+        partition_vec = relabel_partition_vec(partition_vec)
+    elif method=='GMM':
+        GMM = mixture.GaussianMixture(n_components=k, covariance_type='full',n_init=n_init)
+        GMM.fit(X)
+        partition_vec = GMM.predict(X)
         partition_vec = relabel_partition_vec(partition_vec)
     else:
         error('something went wrong. Please specify valid clustering method')
