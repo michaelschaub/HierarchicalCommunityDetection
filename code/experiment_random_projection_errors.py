@@ -318,10 +318,10 @@ def create_diagonal_graph(n=9,prob=0.5,prob2=0.3):
 def create_agglomerated_graphGHRH():
 
     groups_per_level=3
-    n_levels=4
+    n_levels=3
     n=3**10
     c_bar=50
-    snr = 7
+    snr = 3
     D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
     G=D_actual.generateNetworkExactProb()
     A=D_actual.to_scipy_sparse_matrix(G)

@@ -81,6 +81,9 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
     levels = [k+1]
     while len(Ks)>0:
 
+        print Ks
+        print A.shape
+
         Eagg, Nagg = compute_number_links_between_groups(A,partition)
         # TODO The normalization seems important for good results -- why?
         Aagg = Eagg / Nagg

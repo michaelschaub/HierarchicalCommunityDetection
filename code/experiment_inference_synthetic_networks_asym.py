@@ -69,7 +69,7 @@ def infer_k_known(groups_per_level=3, n_levels=3, model='SBM', prefix="results")
     # for rep in xrange(10):
 
         for snr in np.arange(0.5, 10.5, 0.5):
-            # for snr in np.arange(0.5,10.5,1):
+        # for snr in np.arange(3.5,6.5,1):
 
             print 'SNR', snr
 
@@ -91,6 +91,7 @@ def infer_k_known(groups_per_level=3, n_levels=3, model='SBM', prefix="results")
 
             # calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
+            print score_matrix
             precision, recall = metrics.calculate_precision_recall(score_matrix)
             diff_levels = metrics.compare_levels(true_pvec, inf_pvec)
             bottom_lvl = score_matrix[-1, -1]
