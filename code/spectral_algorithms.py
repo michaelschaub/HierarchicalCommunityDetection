@@ -484,7 +484,7 @@ def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partitio
     return Ks, error, partition_vecs
 
 
-def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='GMM', n_init=20):
+def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='GMMsperical', n_init=20):
     """ Perform clustering in spectral embedding space according to various criteria"""
     V = evecs[:,:k]
 
@@ -506,6 +506,16 @@ def find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv, method='GMM', n_in
         partition_vec = relabel_partition_vec(partition_vec)
     elif method=='GMM':
         GMM = mixture.GaussianMixture(n_components=k, covariance_type='full',n_init=n_init)
+        GMM.fit(X)
+        partition_vec = GMM.predict(X)
+        partition_vec = relabel_partition_vec(partition_vec)
+    elif method=='GMMsperical':
+        GMM = mixture.GaussianMixture(n_components=k, covariance_type='spherical',n_init=n_init)
+        GMM.fit(X)
+        partition_vec = GMM.predict(X)
+        partition_vec = relabel_partition_vec(partition_vec)
+    elif method=='GMMdiag':
+        GMM = mixture.GaussianMixture(n_components=k, covariance_type='diag',n_init=n_init)
         GMM.fit(X)
         partition_vec = GMM.predict(X)
         partition_vec = relabel_partition_vec(partition_vec)
