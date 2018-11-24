@@ -235,7 +235,7 @@ def test_projection_diagonal_blocks(n=9,q=4):
     evecs = evecs[:,index]
     tau = None
     Dtau_sqrt_inv = None
-    pvec, Hnorm = spectral.find_partition(evecs, q, tau, norm, mode, Dtau_sqrt_inv)
+    pvec, Hnorm = spectral.find_partition(evecs, q, mode, Dtau_sqrt_inv)
     error_orig = calculate_proj_error2(evecs, Hnorm, norm)
     print relabel_partition_vec(pvec)
     print error_orig
@@ -254,10 +254,10 @@ def test_projection_diagonal_blocks(n=9,q=4):
 
         tau = None
         Dtau_sqrt_inv = None
-        partition_vec, Hnorm = spectral.find_partition(evecs, q, tau, norm, mode, Dtau_sqrt_inv,method='QR')
+        partition_vec, Hnorm = spectral.find_partition(evecs, q,  mode, Dtau_sqrt_inv,method='QR')
         error[ii] = calculate_proj_error2(evecs, Hnorm, norm)
 
-        partition_vec, Hnorm = spectral.find_partition(evecs, q, tau, norm, mode, Dtau_sqrt_inv, method='KM')
+        partition_vec, Hnorm = spectral.find_partition(evecs, q,  mode, Dtau_sqrt_inv, method='KM')
         error2[ii] = calculate_proj_error2(evecs, Hnorm, norm)
 
     plt.figure()
@@ -277,7 +277,7 @@ def test_projection_diagonal_blocks(n=9,q=4):
     evecs = evecs[:,index]
     tau = None
     Dtau_sqrt_inv = None
-    pvec2, Hnorm = spectral.find_partition(evecs, q, tau, norm, mode, Dtau_sqrt_inv)
+    pvec2, Hnorm = spectral.find_partition(evecs, q, mode, Dtau_sqrt_inv)
     error_orig = calculate_proj_error2(evecs, Hnorm, norm)
     print relabel_partition_vec(pvec2)
     print error_orig
@@ -295,10 +295,10 @@ def test_projection_diagonal_blocks(n=9,q=4):
 
         tau = None
         Dtau_sqrt_inv = None
-        partition_vec, Hnorm = spectral.find_partition(evecs, q, tau, norm, mode, Dtau_sqrt_inv,method='QR')
+        partition_vec, Hnorm = spectral.find_partition(evecs, q,  mode, Dtau_sqrt_inv,method='QR')
         error[ii] = calculate_proj_error2(evecs, Hnorm, norm)
 
-        partition_vec, Hnorm = spectral.find_partition(evecs, q, tau, norm, mode, Dtau_sqrt_inv, method='KM')
+        partition_vec, Hnorm = spectral.find_partition(evecs, q,  mode, Dtau_sqrt_inv, method='KM')
         error2[ii] = calculate_proj_error2(evecs, Hnorm, norm)
     plt.figure()
     plt.plot(error)
@@ -317,11 +317,11 @@ def create_diagonal_graph(n=9,prob=0.5,prob2=0.3):
 
 def create_agglomerated_graphGHRH():
 
-    groups_per_level=3
+    groups_per_level=2
     n_levels=3
-    n=3**10
+    n=2**11
     c_bar=50
-    snr = 3
+    snr = 10
     D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
     G=D_actual.generateNetworkExactProb()
     A=D_actual.to_scipy_sparse_matrix(G)
@@ -357,8 +357,6 @@ def test_kmeans_bootstrap_comparison():
     for i in Ks:
         errors2[i-1], std_errors2[i-1] = test_random_projection_with_kmeans2(n,i)
 
-    errors2[errors2==0] = 1
-    std_errors2[0] = 0
     print errors
     print errors2
     plt.figure()
@@ -370,6 +368,8 @@ def test_kmeans_bootstrap_comparison():
     plt.figure()
     meas_errors = np.array([0] + [e for e in errors[::-1]])
     meas_errors[meas_errors==0] = 1
+    errors2[errors2==0] = 1
+    std_errors2[0] = 0
     plt.plot(np.arange(1,n+1),(meas_errors-errors2)/meas_errors)
 
 
@@ -435,8 +435,8 @@ def identify_partitions_and_errors(A,Ks,model='SBM',reg=False, norm='F',partitio
     #find partitions and their error for each k
     for ki,k in enumerate(Ks):
         if partitions_unknown:
-            partition_vec, Hnorm = spectral.find_partition(evecs, k, tau, norm, model, Dtau_sqrt_inv,method='QR')
-        else :
+            partition_vec, Hnorm = spectral.find_partition(evecs, k, model, Dtau_sqrt_inv,method='QR')
+        else:
             partition_vec = partition_vecs[ki]
             Hnorm = spectral.create_normed_partition_matrix_from_vector(partition_vec,model)
 
