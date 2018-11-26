@@ -338,7 +338,7 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=10, noise=1e-3, Ks=None):
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=10, noise=1e-3, Ks=None, no_Ks_forward=True):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -414,8 +414,12 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
             # TODO: it might be useful to pass down candidates
             # from previous agglomeration rounds here instead of starting from scratch!
             if find_levels:
-                k = Ks[0] - 1
-                Ks = np.arange(k, 1, -1)
+                if no_Ks_forward:
+                    k = Ks[0] - 1
+                    Ks = np.arange(k, 1, -1)
+                else:
+                    # TODO implement this!
+                    pass
             levels.append(k + 1)
             # if levels are not prespecified, reset candidates
             print 'partition into', k + 1, ' groups'
@@ -527,17 +531,16 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', threshold=1 / 3
             std_errors = std_errors + (errors - m) * (errors - m_prev)
 
         sum_errors /= reps
-
-    std_errors = np.sqrt(std_errors)
+        std_errors = np.sqrt(std_errors/(reps-1))
     # find errors below threshold
     below_thresh = (sum_errors < threshold)
 
     # TODO: replace all of the below and the find minima function by using find peaks function!
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html#scipy.signal.find_peaks
     levels = find_local_minima(sum_errors)
-    print below_thresh.nonzero()[0]
-    print 'sum_errors', zip(Ks[levels], sum_errors[levels])
-    print 'sum_errors', zip(Ks[below_thresh], sum_errors[below_thresh])
+    # print below_thresh.nonzero()[0]
+    # print 'sum_errors', zip(Ks[levels], sum_errors[levels])
+    # print 'sum_errors', zip(Ks[below_thresh], sum_errors[below_thresh])
     # choose only local minima that are below threshold
     levels = np.intersect1d(levels, below_thresh.nonzero()[0])
     print 'Levels inferred=', len(levels), Ks[levels], sum_errors[levels], std_errors[levels]
@@ -643,7 +646,7 @@ def find_partition(evecs, k, model, Dtau_sqrt_inv, method='GMMspherical', n_init
         partition_vec = GMM.predict(X)
         partition_vec = relabel_partition_vec(partition_vec)
     else:
-        error('something went wrong. Please specify valid clustering method')
+        raise ValueError('something went wrong. Please specify valid clustering method')
 
     H = create_normed_partition_matrix_from_vector(partition_vec, model)
 

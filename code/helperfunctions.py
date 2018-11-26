@@ -398,11 +398,11 @@ def find_local_minima(vec):
     goes_neg = (sign_diff == -2).nonzero()[0] + 1
     goes_pos = (sign_diff == 2).nonzero()[0] + 1
 
-    print "VEC", vec
-    print vec_diff
-    print sign_diff
-    print goes_neg
-    print goes_pos
+    # print "VEC", vec
+    # print vec_diff
+    # print sign_diff
+    # print goes_neg
+    # print goes_pos
 
     # sometimes there are no sign changes
     try:
@@ -414,7 +414,7 @@ def find_local_minima(vec):
             segments = zip(np.append(0, goes_neg), goes_pos)
     # catches no sign or single sign change
     except IndexError:
-        print "IndexError dues to <=1 sign change"
+        # print "IndexError due to <=1 sign change"
         # check if the minimum corresponds to a local minimum
         # i.e. does min of vec correspond to -ve in vec_diff
         if vec_diff[np.argmin(vec)] < 0:
@@ -424,7 +424,7 @@ def find_local_minima(vec):
             return np.array([], dtype=int)
 
     minima = []
-    print "SEG", segments
+    # print "SEG", segments
 
     for seg in segments:
         minima.append(seg[0] + np.argmin(vec[seg[0]:seg[1]]))
