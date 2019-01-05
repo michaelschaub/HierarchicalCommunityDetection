@@ -313,7 +313,9 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
 
     # FIRST STEP -- estimate number of partitions
     # If Ks is not specified then estimate the number of clusters using the Bethe Hessian
-    # TODO: atm just uses the Bethe Hessian to figure out the number no other options
+    # TODO: atm just uses the Bethe Hessian to figure out the number of communities but
+    # then uses Rohe Laplacian to do the first inference step -- we can simplify to just
+    # use Bethe Hessian
     if Ks is None:
         p0 = spectral_partition(A, spectral_oper=first_pass, num_groups=-1)
         Ks = []
@@ -338,7 +340,8 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=10, noise=1e-3, Ks=None, no_Ks_forward=True):
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap",
+                                        model='SBM', reps=10, noise=1e-3, Ks=None, no_Ks_forward=True):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -360,13 +363,14 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
     1) If the list of Ks to consider is empty, we will consider all possible Ks and need
     to find the right subsplits/ levels, otherwise we only need to check partitions for
     the number of groups provided
-    2) While the list of of Ks is not empty, agglomerate network and try to identify partitions either using the identify_next_level function
+    2) While the list of of Ks is not empty, agglomerate network and try to identify
+    partitions either using the identify_next_level function
     (unknown Ks, full list), or the identify_partitions_at_level function
     (known Ks, list of group sizes)
     3) these functions return a new Ks list, and a new partition to operate with
     according to which we agglomerate the network and start again from 1)
     """
-    # TODO: the following options are not really made use / unclear effect
+    # TODO: the following options are not really made use of
     # spectral_oper -- spectral operator used to perform clustering not used atm
     # model -- parameter for spectral clustering
 
@@ -394,8 +398,7 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
         print "List of partitions to assess: ", Ks, "\n"
         print "Current shape of network: ", A.shape, "\n"
 
-        # TODO The normalization seems important for good results -- why?
-        # should we normalize by varaiance of Bernoullis as well?
+        # Question: should we normalize by varaiance of Bernoullis as well?
         Eagg, Nagg = compute_number_links_between_groups(A, partition)
         Aagg = Eagg / Nagg
 
@@ -411,14 +414,14 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
             pvec.append(hier_partition_vecs[0])
             partition = expand_partitions_to_full_graph(pvec)[-1]
 
-            # TODO: it might be useful to pass down candidates
-            # from previous agglomeration rounds here instead of starting from scratch!
             if find_levels:
                 if no_Ks_forward:
                     k = Ks[0] - 1
                     Ks = np.arange(k, 1, -1)
                 else:
-                    # TODO implement this!
+                    # It might be useful to pass down candidates
+                    # from previous agglomeration rounds here instead of starting from scratch?!
+                    # TODO implement this!?
                     pass
             levels.append(k + 1)
             # if levels are not prespecified, reset candidates
@@ -426,10 +429,9 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
             if k == 1:
                 Ks = []
 
-        # TODO: check below
         # this exception occurs when there is only a single candidate partition
         # and the error is not high enough
-        # Check if  not better described as: if there is *no candidate* partition
+        # Note: is this not better described as: if there is *no candidate* partition
         # (why only single candidate? why error not high enough -- low?!)
         except IndexError:
             pass
@@ -461,10 +463,9 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
         Ks -- remaining list of group sizes to consider
         partition_vec -- found partition at this level
     """
-    #TODO: norm should not be passed on as parameter here, since we do not assess error
+    #TODO: norm should not be passed on as parameter here, since we do not assess error.
 
     # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
-    # TODO: check here
     L = construct_graph_Laplacian(A)
     Dtau_sqrt_inv = 0
 
@@ -474,11 +475,9 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
         ev, evecs = scipy.linalg.eigh(L)
     except ValueError:
         # ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM',tol=1e-6)
-        # TODO: check here
         ev, evecs = scipy.sparse.linalg.eigsh(L, Ks[0], which='SM', tol=1e-6)
 
     index = np.argsort(np.abs(ev))
-    # TODO: check here
     # evecs = evecs[:,index[::-1]]
     evecs = evecs[:, index]
 
@@ -535,7 +534,7 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', threshold=1 / 3
     # find errors below threshold
     below_thresh = (sum_errors < threshold)
 
-    # TODO: replace all of the below and the find minima function by using find peaks function!
+    # TODO: replace all of the below and the find minima function by using find peaks function!?
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html#scipy.signal.find_peaks
     levels = find_local_minima(sum_errors)
     # print below_thresh.nonzero()[0]
@@ -566,7 +565,6 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
 
     max_k = Ks[0]
 
-    # TODO: check here!
     # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
     L = construct_graph_Laplacian(A)
     Dtau_sqrt_inv = L
@@ -578,10 +576,8 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
     except ValueError:
         print L.shape, max_k
         # ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='LM',tol=1e-6)
-        # TODO: check here
         ev, evecs = scipy.sparse.linalg.eigsh(L, max_k, which='SM', tol=1e-6)
     index = np.argsort(np.abs(ev))
-    # TODO: check here
     # evecs = evecs[:,index[::-1]]
     evecs = evecs[:, index]
 
