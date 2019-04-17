@@ -14,7 +14,6 @@ from sklearn.cluster import KMeans
 from sklearn import preprocessing
 from helperfunctions import *
 
-
 def find_subspace_angle_between_ev_bases(U,V):
     Q1 = U.T.dot(V)
     sigma = scipy.linalg.svd(Q1, compute_uv=False)
@@ -129,8 +128,8 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
 
     # k ==  number of groups == max index of partition +1
     k = np.max(partition)+1
-    print "HIER SPECTRAL PARTITION -- agglomerative\n"
-    print "Initial partition into", k , "groups \n"
+    print "\n\nHIER SPECTRAL PARTITION -- agglomerative\n"
+    print "Initial partition into", k, "groups \n"
 
     # Ks stores the candidate levels in inverse order
     # Note: set to min 1 group, as no agglomeration required
@@ -160,21 +159,22 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
             errors, std_errors, hier_partition_vecs = identify_next_level(
                 Aagg, Ks, model=model, reg=False, norm='F', reps=reps, noise=noise)
             kmax = np.max(Ks)
-            expected_error = np.sqrt(Ks - Ks**2 / kmax)
-            expected_error[0] =1
-            expected_error[-1] =1
-            errors[0] = 1
-            relerror = (errors - expected_error) / expected_error
-            plt.figure(9)
-            plt.plot(Ks,relerror)
-            plt.figure(10)
-            plt.plot(Ks,std_errors)
-            threshold = -0.6
-            local_min = argrelmin(relerror)[0]
-            below_thresh = np.nonzero(relerror < threshold)[0]
-            print "Ks, local_min, below_thresh"
-            print Ks, Ks[local_min], Ks[below_thresh]
-            selected = np.intersect1d(local_min, below_thresh).astype(int)
+            selected = find_all_relevant_minima_from_errors(errors,std_errors)
+            selected = selected -1
+            selected = selected[:-1]
+            # expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
+            # expected_error[0] = 1
+            # expected_error[-1] = 1
+            # errors[0] = 1
+            # relerror = (errors - expected_error) / expected_error
+            # plt.figure(10)
+            # plt.plot(Ks, std_errors)
+            # threshold = -0.6
+            # local_min = argrelmin(relerror)[0]
+            # below_thresh = np.nonzero(relerror < threshold)[0]
+            # print "Ks, local_min, below_thresh"
+            # print Ks, Ks[local_min], Ks[below_thresh]
+            # selected = np.intersect1d(local_min, below_thresh).astype(int)
             Ks = Ks[selected]
             print "Minima at", Ks
             hier_partition_vecs = [hier_partition_vecs[si] for si in selected]
@@ -294,12 +294,11 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
 
 
 def create_agglomerated_graphGHRG():
-
-    groups_per_level = 2
-    n_levels = 4
-    n = 2**14
+    groups_per_level = 3
+    n_levels = 3
+    n = 3**10
     c_bar = 30
-    snr = 5
+    snr = 3
     D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
     G = D_actual.generateNetworkExactProb()
     A = D_actual.to_scipy_sparse_matrix(G)
@@ -309,6 +308,57 @@ def create_agglomerated_graphGHRG():
     Aagg = Eagg / Nagg
 
     return Aagg, A, D_actual.get_partition_all()
+
+
+def expected_errors_random_projection(dim_n,levels):
+    """
+    Compute vector of expected errors for random projection
+        dim_n -- ambient space
+        levels of hierarchy [1, ..., dim_n]
+    """
+    start_end_pairs = zip(levels[:-1],levels[1:])
+
+    expected_error = []
+    for i,j in start_end_pairs:
+        Ks = np.arange(i,j)
+        errors = np.sqrt((Ks - i) * (j - Ks) / dim_n)
+        expected_error = np.hstack([expected_error,errors])
+    expected_error = np.hstack([expected_error,0])
+    return expected_error
+
+def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
+    #TODO: how to choose the threshold?
+    # relerror = np.zeros(expected_error.size)
+    # nonzero = expected_error != 0
+    # relerror[nonzero] = (errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
+    # threshold = -0.6
+    relerror = (errors +2*std_errors) - expected_error
+    threshold = 0
+    local_min = argrelmin(relerror)[0]
+    below_thresh = np.nonzero(relerror < threshold)[0]
+    levels = np.intersect1d(local_min, below_thresh).astype(int)
+    Ks = np.arange(1, errors.size+1)
+    print "Ks, local_min, below_thresh"
+    print Ks, Ks[local_min], Ks[below_thresh]
+    best_level = -1
+    if levels.size > 0:
+        best_level = levels[np.argmin(relerror[levels])]+1
+
+    plt.figure(9)
+    plt.plot(np.arange(1,errors.size+1), relerror)
+    return best_level
+
+def find_all_relevant_minima_from_errors(errors,std_errors):
+    levels = [1,errors.size]
+    expected_error = expected_errors_random_projection(errors.size,levels)
+    next_level = find_smallest_relevant_minima_from_errors(errors,std_errors, expected_error)
+    while next_level != -1:
+        levels = levels + [next_level]
+        levels.sort()
+        expected_error = expected_errors_random_projection(errors.size, levels)
+        next_level = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
+    return np.array(levels)
+
 
 
 def compare_agglomeration_variants():
@@ -345,30 +395,29 @@ def compare_agglomeration_variants():
     Ks = np.arange(1, kmax+1)
     errors, std_errors, partition_vecs = identify_next_level(Aagg, Ks)
 
-    expected_error = np.sqrt(Ks - Ks**2 / kmax)
+    true_levels = [len(np.unique(pv)) for pv in true_pvec]
+    true_levels = [1] + true_levels
+    expected_error = expected_errors_random_projection(kmax,true_levels)
     candidates = expected_error - (errors + 2*std_errors) > 0
     plt.figure()
     plt.errorbar(Ks, errors, std_errors)
     plt.plot(Ks, expected_error)
+    expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
+    plt.plot(Ks, expected_error)
 
     # set first and last error to 1 to avoid division by zero
     # these are not local minima in any case
-    errors[-1] = 1
-    errors[0] = 1
-    expected_error[0] =1
-    expected_error[-1]=1
-    relerror = (errors - expected_error) / expected_error
-    #TODO: how to choose the threshold?
-    threshold = -0.6
-    local_min = argrelmin(relerror)[0] + 1
-    below_thresh = np.nonzero(relerror < threshold)[0] + 1
-    levels = np.intersect1d(local_min, below_thresh).astype(int)
+    expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
+    levels = find_all_relevant_minima_from_errors(errors,std_errors)
 
     print "INFERRED LEVELS ONE-SHOT"
     print levels
     for i in (levels-1):
         print partition_vecs[i]
 
+    relerror = np.zeros(expected_error.size)
+    nonzero = expected_error != 0
+    relerror[nonzero] = (errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
     plt.figure()
     plt.plot(Ks, relerror)
     plt.figure()
