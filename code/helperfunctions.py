@@ -123,6 +123,9 @@ def calculate_proj_error(evecs, H, norm):
         norm1 = scipy.linalg.norm(proj1, 2)
         norm2 = scipy.linalg.norm(proj2, 2)
         error = .5 * (norm1 + norm2)
+    elif norm == 'Fnew':
+        norm1 = scipy.linalg.norm(proj1) 
+        error = 0.5 * norm1
 
     return error
 

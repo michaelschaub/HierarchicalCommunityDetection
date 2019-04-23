@@ -411,7 +411,7 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
 
         if find_levels:
             errors, std_errors, hier_partition_vecs = identify_next_level(
-                Aagg, Ks, model=model, reg=False, norm='F', reps=reps, noise=noise)
+                Aagg, Ks, model=model, reg=False, norm='Fnew', reps=reps, noise=noise)
             # kmax = np.max(Ks)
             selected = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
             selected = selected -1
@@ -422,7 +422,7 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
         else:
             k = Ks[-1] 
             Ks, hier_partition_vecs = identify_partitions_at_level(
-                Aagg, Ks, model=model, reg=False, norm='F')
+                Aagg, Ks, model=model, reg=False)
 
         try:
             pvec.append(hier_partition_vecs[-1])
@@ -461,7 +461,7 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
 # -------------------------------------------------
 
 
-def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
+def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
     """
     For a given graph with (weighted) adjacency matrix A and list of
     partition sizes to assess (Ks), find the partition of a given size Ks[0]
@@ -473,13 +473,11 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
               (e.g. [3, 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
         model -- parameter for spectral clustering
         reg -- use regularization for spectral clustering?
-        norm -- unclear
 
     Outputs:
         Ks -- remaining list of group sizes to consider
         partition_vec -- found partition at this level
     """
-    #TODO: norm should not be passed on as parameter here, since we do not assess error.
 
     # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
     L = construct_graph_Laplacian(A)
@@ -501,7 +499,7 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
     return Ks[:-1], [partition_vec]
 
 
-def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=1e-3):    
+def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=1e-3):    
     """
     Identify agglomeration levels by checking the projection errors and comparing the to a
     perturbed verstion of the same network
@@ -547,7 +545,7 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=
     return sum_errors, std_errors, partition_vecs
 
 
-def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', partition_vecs=[]):
+def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', partition_vecs=[]):
     """
     Collect the partitions and projection errors found for a list Ks of 'putative' group numbers
     """
