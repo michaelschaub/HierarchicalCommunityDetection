@@ -66,7 +66,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
                 file.write('\n')
 
 
-def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', prefix="results"):
+def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', prefix="results",version="new"):
 
     n = 3**9
 
