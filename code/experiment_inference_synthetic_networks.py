@@ -2,12 +2,13 @@ from __future__ import division
 import numpy as np
 import GHRGbuild
 import spectral_algorithms as spectral
+import spectral_algorithms_new as spectral_new
 import metrics
 from matplotlib import pyplot as plt
 plt.ion()
 
 
-def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"):
+def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results",version="new"):
 
     n = 3**9
 
@@ -38,7 +39,10 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
             # ~ print np.unique(tp)
 
             # infer partitions with no noise
-            inf_pvec = spectral.hier_spectral_partition(A, reps=20)
+            if version == "new":
+                inf_pvec = spectral_new.hier_spectral_partition(A, reps=20)
+            else:
+                inf_pvec = spectral.hier_spectral_partition(A, reps=20)
 
             # calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
@@ -95,8 +99,10 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', p
             print 'Ks', Ks
 
             # infer partitions with no noise
-            inf_pvec = spectral.hier_spectral_partition(A, Ks=Ks, model=model)
-
+            if version == "new":
+                inf_pvec = spectral_new.hier_spectral_partition(A, Ks=Ks, model=model)
+            else:
+                inf_pvec = spectral.hier_spectral_partition(A, Ks=Ks, model=model)
             # calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
             precision, recall = metrics.calculate_precision_recall(score_matrix)
@@ -120,8 +126,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', p
                 file.write('\n')
 
 
-def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"):
-
+def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="results",version="new"):
     n = 3**9
 
     c_bar = 50
@@ -144,8 +149,11 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3, prefix="
             # get true hierarchy
             true_pvec = D_actual.get_partition_all()
 
-            # infer partitions with no noise
-            inf_pvec = spectral.hier_spectral_partition_agglomerate(A, true_pvec[-1])
+            #infer partitions with no noise
+            if version == "new":
+                inf_pvec = spectral_new.hier_spectral_partition_agglomerate(A,true_pvec[-1])
+            else:
+                inf_pvec = spectral.hier_spectral_partition_agglomerate(A,true_pvec[-1])
 
             # calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)

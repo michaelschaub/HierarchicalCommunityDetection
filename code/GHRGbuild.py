@@ -151,7 +151,7 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
         if np.floor(n_this_level) != n_this_level:
             print "Rounding number of nodes"
         c_bar=(cin/n_this_level)*(n_this_level / float(groups_per_level))
-        print omega[level]
+        # print omega[level]
 
 
     D=GHRGmodel.GHRG()
@@ -178,7 +178,7 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
 
     #construct dendrogram breadth first
     for nl in xrange(n_levels-1):
-        print nodes_this_level
+        # print nodes_this_level
         nodes_last_level=list([nodes_this_level[0]])
         nodes_this_level=[]
         for parent in nodes_last_level:

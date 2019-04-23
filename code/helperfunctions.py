@@ -100,8 +100,6 @@ def create_normed_partition_matrix_from_vector(partition_vec, mode):
     if mode == 'DCSBM':
         # TODO -- check this part
         print "TODO -- check this normalization"
-        Dsqrt = scipy.sparse.diags(scipy.sqrt(Omega.sum(axis=1) + tau).flatten())
-        H = Dtau_sqrt.dot(H)
 
     # normalize column norm to 1 of the partition indicator matrices
     return preprocessing.normalize(H, axis=0, norm='l2')
@@ -341,32 +339,6 @@ def add_noise_to_small_matrix(M, snr=0.001, noise_type="gaussian"):
         Mp = M + snr * normM / normNoise * noise
 
     return Mp
-
-
-def project_orthogonal_to(subspace_basis, vectors_to_project):
-    """
-    Subspace basis: linearly independent (not necessarily orthogonal or normalized)
-    vectors that span the space orthogonal to which we want to project
-    vectors_to_project: project these vectors into the orthogonal complement of the
-    specified subspace
-
-    compute S*(S^T*S)^{-1}*S' * V
-    """
-
-    if not scipy.sparse.issparse(vectors_to_project):
-        V = np.matrix(vectors_to_project)
-    else:
-        V = vectors_to_project
-
-    if not scipy.sparse.issparse(subspace_basis):
-        S = np.matrix(subspace_basis)
-    else:
-        S = subspace_basis
-
-    projected = S * scipy.sparse.linalg.spsolve(S.T * S, S.T * V)
-
-    orthogonal_proj = V - projected
-    return orthogonal_proj
 
 ##################################################
 # VARIOUS OTHER THINGS

@@ -12,24 +12,23 @@ import metrics
 from matplotlib import pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn import preprocessing
-from helperfunctions import *
+from helperfunctions import project_orthogonal_to, compute_number_links_between_groups, expand_partitions_to_full_graph
 
 def find_subspace_angle_between_ev_bases(U,V):
     Q1 = U.T.dot(V)
     sigma = scipy.linalg.svd(Q1, compute_uv=False)
-    angle = -np.ones(sigma.size)
+    ang = -np.ones(sigma.size)
     cos_index = sigma**2 <= 0.5
     if np.all(cos_index):
-        angle = np.arccos(sigma)
+        ang= np.arccos(sigma)
     else:
         Q2 = V - U.dot(Q1)
         sigma2 = scipy.linalg.svd(Q2,compute_uv=False)
-        angle[cos_index] = np.arccos(sigma[cos_index])
+        ang[cos_index] = np.arccos(sigma[cos_index])
         sin_index = np.bitwise_not(cos_index)
-        angle[sin_index] = np.arcsin(sigma2[sin_index])
+        ang[sin_index] = np.arcsin(sigma2[sin_index])
 
-    return angle, sigma
-
+    return ang, sigma
 
 def project_to(subspace_basis, vectors_to_project):
     """
@@ -88,13 +87,11 @@ def test_random_projection_with_kmeans2(n, k):
         H = spectral.create_partition_matrix_from_vector(partition_vec)
         H = preprocessing.normalize(H, axis=0, norm='l2')
         error[i] = scipy.linalg.norm(project_orthogonal_to(H, V))
-    meanerror = np.mean(error)
-    stderror = np.std(error)
 
     return error
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-1, Ks=None, no_Ks_forward=True):
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-1, Ks=None, no_Ks_forward=False):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -145,6 +142,7 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
     levels = [k]
     pvec = []
     pvec.append(partition)
+    list_candidate_agglomeration = Ks
     while len(Ks) > 0:
 
         print "List of partitions to assess: ", Ks, "\n"
@@ -158,30 +156,16 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
         if find_levels:
             errors, std_errors, hier_partition_vecs = identify_next_level(
                 Aagg, Ks, model=model, reg=False, norm='F', reps=reps, noise=noise)
-            kmax = np.max(Ks)
-            selected = find_all_relevant_minima_from_errors(errors,std_errors)
+            # kmax = np.max(Ks)
+            selected = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
             selected = selected -1
             selected = selected[:-1]
-            # expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
-            # expected_error[0] = 1
-            # expected_error[-1] = 1
-            # errors[0] = 1
-            # relerror = (errors - expected_error) / expected_error
-            # plt.figure(10)
-            # plt.plot(Ks, std_errors)
-            # threshold = -0.6
-            # local_min = argrelmin(relerror)[0]
-            # below_thresh = np.nonzero(relerror < threshold)[0]
-            # print "Ks, local_min, below_thresh"
-            # print Ks, Ks[local_min], Ks[below_thresh]
-            # selected = np.intersect1d(local_min, below_thresh).astype(int)
             Ks = Ks[selected]
             print "Minima at", Ks
             hier_partition_vecs = [hier_partition_vecs[si] for si in selected]
         else:
             k = Ks[0]
-            Ks, hier_partition_vecs = identify_partitions_at_level(
-                Aagg, Ks, model=model, reg=False, norm='F')
+            print "ERROR"
 
         try:
             pvec.append(hier_partition_vecs[-1])
@@ -193,9 +177,11 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
                 if no_Ks_forward:
                     k = np.max(Ks)
                     Ks = np.arange(1, k+1)
+                    list_candidate_agglomeration = Ks
                 else:
-                    # TODO implement this!
-                    pass
+                    list_candidate_agglomeration = Ks[selected]
+                    k = np.max(Ks)
+                    Ks = np.arange(1, k+1)
             levels.append(k)
             # if levels are not prespecified, reset candidates
             print 'partition into', k , ' groups'
@@ -231,7 +217,7 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=
         std_errors = 0.
         m = 0.
 
-        for rep in xrange(reps):
+        for _ in xrange(reps):
             Anew = spectral.add_noise_to_small_matrix(A, snr=noise)
             _, errors, _ = identify_partitions_and_errors(Anew, Ks, model, reg, norm, partition_vecs)
             sum_errors += errors
@@ -256,7 +242,6 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
 
     L = spectral.construct_graph_Laplacian(A)
     Dtau_sqrt_inv = 0
-    tau = 0
 
     # get eigenvectors
     # input A may be a sparse scipy matrix or dense format numpy 2d array.
@@ -293,12 +278,8 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
     return Ks, error, partition_vecs
 
 
-def create_agglomerated_graphGHRG():
-    groups_per_level = 3
-    n_levels = 3
-    n = 3**10
+def create_agglomerated_graphGHRG(groups_per_level=3,n_levels=3,n=3**10, snr=5):
     c_bar = 30
-    snr = 3
     D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
     G = D_actual.generateNetworkExactProb()
     A = D_actual.to_scipy_sparse_matrix(G)
@@ -328,12 +309,12 @@ def expected_errors_random_projection(dim_n,levels):
 
 def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
     #TODO: how to choose the threshold?
-    # relerror = np.zeros(expected_error.size)
-    # nonzero = expected_error != 0
-    # relerror[nonzero] = (errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
-    # threshold = -0.6
-    relerror = (errors +2*std_errors) - expected_error
-    threshold = 0
+    relerror = np.zeros(expected_error.size)
+    nonzero = expected_error != 0
+    relerror[nonzero] = (errors[nonzero] + 2*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
+    threshold = -0.6
+    # relerror = (errors +2*std_errors) - expected_error
+    # threshold = 0
     local_min = argrelmin(relerror)[0]
     below_thresh = np.nonzero(relerror < threshold)[0]
     levels = np.intersect1d(local_min, below_thresh).astype(int)
@@ -348,7 +329,7 @@ def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
     plt.plot(np.arange(1,errors.size+1), relerror)
     return best_level
 
-def find_all_relevant_minima_from_errors(errors,std_errors):
+def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration):
     levels = [1,errors.size]
     expected_error = expected_errors_random_projection(errors.size,levels)
     next_level = find_smallest_relevant_minima_from_errors(errors,std_errors, expected_error)
@@ -357,6 +338,8 @@ def find_all_relevant_minima_from_errors(errors,std_errors):
         levels.sort()
         expected_error = expected_errors_random_projection(errors.size, levels)
         next_level = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
+
+    levels = np.intersect1d(np.array(levels),list_candidate_agglomeration)
     return np.array(levels)
 
 
@@ -367,6 +350,83 @@ def compare_agglomeration_variants():
     # Create an aggregated graph as we would have in the test loop
     # and check current agglomeration practise
     Aagg, Aorg, true_pvec = create_agglomerated_graphGHRG()
+    pvec_inf = spectral.hier_spectral_partition_agglomerate(Aorg, true_pvec[-1],
+                                                            spectral_oper="Lap",
+                                                            model='SBM',
+                                                            reps=10,
+                                                            noise=1e-3,
+                                                            Ks=None)
+    print "INFERRED PARTITION OLD, TRUE PARTITION"
+    old_part = [len(np.unique(pv)) for pv in pvec_inf]
+    true_part = [len(np.unique(pv)) for pv in true_pvec]
+    print old_part
+    print true_part
+    if old_part == true_part:
+        print "Nothing interesting happening" 
+
+    plt.close('all')
+    plt.figure()
+    plt.imshow(Aagg-np.diag(np.diag(Aagg)))
+
+    L = spectral.construct_graph_Laplacian(Aagg)
+    ev, evecs = scipy.linalg.eigh(L)
+    plt.figure()
+    plt.plot(ev, 'x')
+
+
+    # ############
+    # Variant 2:
+    # get raw projeciton errors and compare to analytical value in 'relative' manner
+    print "\n\n START NEW TESTS"
+    kmax, _ = Aagg.shape
+    Ks = np.arange(1, kmax+1)
+    errors, std_errors, partition_vecs = identify_next_level(Aagg, Ks)
+
+    true_levels = [len(np.unique(pv)) for pv in true_pvec]
+    true_levels = [1] + true_levels
+    expected_error = expected_errors_random_projection(kmax,true_levels)
+    candidates = expected_error - (errors + 2*std_errors) > 0
+    plt.figure()
+    plt.errorbar(Ks, errors, std_errors)
+    plt.plot(Ks, expected_error)
+    expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
+    plt.plot(Ks, expected_error)
+
+    # set first and last error to 1 to avoid division by zero
+    # these are not local minima in any case
+    expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
+    levels = find_all_relevant_minima_from_errors(errors,std_errors,Ks)
+
+    print "\n\nINFERRED LEVELS ONE-SHOT"
+    print levels
+    for i in (levels-1):
+        print partition_vecs[i]
+
+    relerror = np.zeros(expected_error.size)
+    nonzero = expected_error != 0
+    relerror[nonzero] = (errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
+    plt.figure()
+    plt.plot(Ks, relerror)
+    plt.figure()
+    plt.plot(Ks, std_errors)
+
+    # WITH INTERMEDIATE AGGREGATION
+    pvec_inf = hier_spectral_partition_agglomerate(Aorg, true_pvec[-1],
+                                                   spectral_oper="Lap", model='SBM',
+                                                   reps=10, noise=1e-3, Ks=None)
+
+    print "INFERRED PARTITION2, TRUE PARTITION"
+    print[len(np.unique(pv)) for pv in pvec_inf]
+    print[len(np.unique(pv)) for pv in true_pvec]
+    for p in pvec_inf:
+        print p
+
+def compare_agglomeration_variants_no_hier():
+    """ Compare various agglomeration techniques"""
+
+    # Create an aggregated graph as we would have in the test loop
+    # and check current agglomeration practise
+    Aagg, Aorg, true_pvec = create_agglomerated_graphGHRG(groups_per_level=27,n_levels=1,n=3**10)
     pvec_inf = spectral.hier_spectral_partition_agglomerate(Aorg, true_pvec[-1],
                                                             spectral_oper="Lap",
                                                             model='SBM',
@@ -408,16 +468,16 @@ def compare_agglomeration_variants():
     # set first and last error to 1 to avoid division by zero
     # these are not local minima in any case
     expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
-    levels = find_all_relevant_minima_from_errors(errors,std_errors)
+    levels = find_all_relevant_minima_from_errors(errors,std_errors,Ks)
 
-    print "INFERRED LEVELS ONE-SHOT"
+    print "\n\nINFERRED LEVELS ONE-SHOT"
     print levels
     for i in (levels-1):
         print partition_vecs[i]
 
     relerror = np.zeros(expected_error.size)
     nonzero = expected_error != 0
-    relerror[nonzero] = (errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
+    relerror[nonzero] = (errors[nonzero]) / expected_error[nonzero]
     plt.figure()
     plt.plot(Ks, relerror)
     plt.figure()
