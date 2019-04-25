@@ -91,7 +91,7 @@ def test_random_projection_with_kmeans2(n, k):
     return error
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-1, Ks=None, no_Ks_forward=False):
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-3, Ks=None, no_Ks_forward=False):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -208,7 +208,9 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=
     verstion of the same network"""
 
     # first identify partitions and their projection error
-    Ks, sum_errors, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    plt.figure(22)
+    plt.plot(Ks, sum_errors2)
 
     # repeat with noise
     if reps > 0:
@@ -229,6 +231,8 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=
 
         sum_errors /= reps
     std_errors = np.sqrt(std_errors/(reps-1))
+    plt.figure(33)
+    plt.plot(Ks, sum_errors)
 
     return sum_errors, std_errors, partition_vecs
 
@@ -278,7 +282,7 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
     return Ks, error, partition_vecs
 
 
-def create_agglomerated_graphGHRG(groups_per_level=3,n_levels=3,n=3**10, snr=5):
+def create_agglomerated_graphGHRG(groups_per_level=3,n_levels=3,n=3**9, snr=6.5):
     c_bar = 30
     D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
     G = D_actual.generateNetworkExactProb()

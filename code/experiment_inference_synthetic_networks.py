@@ -73,7 +73,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', p
     c_bar = 50
 
     # for rep in xrange(20):
-    for rep in xrange(10):
+    for rep in xrange(50):
 
         for snr in np.arange(0.5, 10.5, 0.5):
             # for snr in np.arange(0.5,10.5,1):
@@ -134,6 +134,7 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
 
     for rep in xrange(50):
 
+        # for snr in np.arange(2.5, 10.5, 0.5):
         for snr in np.arange(0.5, 10.5, 0.5):
 
             print 'SNR', snr
@@ -163,8 +164,8 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
             bottom_lvl = score_matrix[-1, -1]
             print "\n\nRESULTS\n\nbottom level"
             print bottom_lvl
+            print "number of levels"
             print len(inf_pvec), len(true_pvec)
-            print diff_levels
             print "precision, recall"
             print precision, recall
 

@@ -342,7 +342,7 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-1, Ks=None, no_Ks_forward=True):
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-3, Ks=None, no_Ks_forward=True):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -408,6 +408,9 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
         # should we normalize by varaiance of Bernoullis as well?
         Eagg, Nagg = compute_number_links_between_groups(A, partition)
         Aagg = Eagg / Nagg
+        # print "OMEGA estimate"
+        # plt.figure()
+        # plt.imshow(Aagg-np.diag(np.diag(Aagg)))
 
         if find_levels:
             errors, std_errors, hier_partition_vecs = identify_next_level(
@@ -520,7 +523,9 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
     """
 
     # first identify partitions and their projection error
-    Ks, sum_errors, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    # plt.figure(22)
+    # plt.plot(Ks, sum_errors2)
 
     # repeat with noise
     if reps > 0:
@@ -563,7 +568,6 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', p
         print L.shape, max_k
         ev, evecs = scipy.sparse.linalg.eigsh(L, max_k, which='SM', tol=1e-6)
     index = np.argsort(np.abs(ev))
-    evecs = evecs[:, index]
 
     # initialise errors
     error = np.zeros(len(Ks))
@@ -587,6 +591,8 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', p
         if partitions_unknown:
             partition_vecs.append(partition_vec)
 
+    # plt.figure(111)
+    # plt.plot(error)
     return Ks, error, partition_vecs
 
 def expected_errors_random_projection(dim_n,levels):
@@ -609,8 +615,14 @@ def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
     #TODO: how to choose the threshold?
     relerror = np.zeros(expected_error.size)
     nonzero = expected_error != 0
+    # plt.figure(10)
+    # plt.plot(expected_error)
+    # plt.plot(errors)
     relerror[nonzero] = (errors[nonzero] + 2*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
-    threshold = -0.6
+    # relerror[nonzero] = (errors[nonzero]) / expected_error[nonzero]
+    # plt.figure()
+    # plt.plot(relerror)
+    threshold = -0.5
     # relerror = (errors +2*std_errors) - expected_error
     # threshold = 0
     local_min = argrelmin(relerror)[0]
@@ -622,6 +634,8 @@ def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
     best_level = -1
     if levels.size > 0:
         best_level = levels[np.argmin(relerror[levels])]+1
+        print "agglomeration level candidate"
+        print best_level
 
     # plt.figure(9)
     # plt.plot(np.arange(1,errors.size+1), relerror)
