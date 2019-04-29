@@ -524,8 +524,6 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
 
     # first identify partitions and their projection error
     Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
-    # plt.figure(22)
-    # plt.plot(Ks, sum_errors2)
 
     # repeat with noise
     if reps > 0:
@@ -534,18 +532,18 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
         std_errors = 0.
         m = 0.
 
-        for _ in xrange(reps):
+        for kk in xrange(reps):
             Anew = add_noise_to_small_matrix(A, snr=noise)
             _, errors, _ = identify_partitions_and_errors(Anew, Ks, model, reg, norm, partition_vecs)
             sum_errors += errors
 
             # calculate online variance
             m_prev = m
-            m = m + (errors - m) / (reps + 1)
+            m = m + (errors - m) / (kk + 1)
             std_errors = std_errors + (errors - m) * (errors - m_prev)
 
         sum_errors /= reps
-    std_errors = np.sqrt(std_errors/(reps-1))
+        std_errors = np.sqrt(std_errors/(reps-1))
 
     return sum_errors, std_errors, partition_vecs
 
@@ -568,6 +566,7 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', p
         print L.shape, max_k
         ev, evecs = scipy.sparse.linalg.eigsh(L, max_k, which='SM', tol=1e-6)
     index = np.argsort(np.abs(ev))
+    evecs = evecs[:, index]
 
     # initialise errors
     error = np.zeros(len(Ks))

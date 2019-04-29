@@ -526,7 +526,7 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', threshold=1 / 3
 
             # calculate online variance
             m_prev = m
-            m = m + (errors - m) / (reps + 1)
+            m = m + (errors - m) / (rep + 1)
             std_errors = std_errors + (errors - m) * (errors - m_prev)
 
         sum_errors /= reps
@@ -564,7 +564,6 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
     """
 
     max_k = Ks[0]
-    print "TEST", max_k
 
     # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
     L = construct_graph_Laplacian(A)

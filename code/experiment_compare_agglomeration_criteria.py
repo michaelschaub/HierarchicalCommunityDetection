@@ -209,8 +209,7 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=
 
     # first identify partitions and their projection error
     Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
-    plt.figure(22)
-    plt.plot(Ks, sum_errors2)
+    std_errors2 = np.zeros((reps,sum_errors2.size))
 
     # repeat with noise
     if reps > 0:
@@ -219,20 +218,25 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=
         std_errors = 0.
         m = 0.
 
-        for _ in xrange(reps):
+        for kk in xrange(reps):
             Anew = spectral.add_noise_to_small_matrix(A, snr=noise)
             _, errors, _ = identify_partitions_and_errors(Anew, Ks, model, reg, norm, partition_vecs)
             sum_errors += errors
+            std_errors2[kk,:] = errors
 
             # calculate online variance
             m_prev = m
-            m = m + (errors - m) / (reps + 1)
+            m = m + (errors - m) / (kk + 1)
             std_errors = std_errors + (errors - m) * (errors - m_prev)
 
-        sum_errors /= reps
+    sum_errors /= reps
     std_errors = np.sqrt(std_errors/(reps-1))
-    plt.figure(33)
-    plt.plot(Ks, sum_errors)
+    plt.figure(125)
+    plt.errorbar(Ks, sum_errors,std_errors)
+
+    plt.figure(126)
+    std_errors2 = np.std(std_errors2,axis=0)  
+    plt.errorbar(Ks, sum_errors,std_errors2)
 
     return sum_errors, std_errors, partition_vecs
 
@@ -317,8 +321,6 @@ def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
     nonzero = expected_error != 0
     relerror[nonzero] = (errors[nonzero] + 2*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
     threshold = -0.6
-    # relerror = (errors +2*std_errors) - expected_error
-    # threshold = 0
     local_min = argrelmin(relerror)[0]
     below_thresh = np.nonzero(relerror < threshold)[0]
     levels = np.intersect1d(local_min, below_thresh).astype(int)
@@ -351,9 +353,10 @@ def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglom
 def compare_agglomeration_variants():
     """ Compare various agglomeration techniques"""
 
+    plt.close("all")
     # Create an aggregated graph as we would have in the test loop
     # and check current agglomeration practise
-    Aagg, Aorg, true_pvec = create_agglomerated_graphGHRG()
+    Aagg, Aorg, true_pvec = create_agglomerated_graphGHRG(snr=1)
     pvec_inf = spectral.hier_spectral_partition_agglomerate(Aorg, true_pvec[-1],
                                                             spectral_oper="Lap",
                                                             model='SBM',
