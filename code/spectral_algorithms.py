@@ -290,7 +290,7 @@ def clusterEVwithQR(EV, randomized=False, gamma=4):
 # PART 3 -- Hierarchical spectral clustering and agglomeration
 ##############################################################
 
-def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='SBM', reps=10, noise=1e-3, Ks=None):
+def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='SBM', reps=10, noise=1e-2, Ks=None):
     """
     Performs a full round of hierarchical spectral clustering.
     Inputs:
@@ -341,7 +341,7 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
 
 
 def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap",
-                                        model='SBM', reps=10, noise=1e-3, Ks=None, no_Ks_forward=True):
+                                        model='SBM', reps=10, noise=1e-2, Ks=None, no_Ks_forward=True):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -487,7 +487,7 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
     return Ks[1:], [partition_vec]
 
 
-def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', threshold=1 / 3, reps=10, noise=1e-3):
+def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', threshold=1 / 3, reps=10, noise=1e-2):
     """
     Identify agglomeration levels by checking the projection errors and comparing the to a
     perturbed verstion of the same network

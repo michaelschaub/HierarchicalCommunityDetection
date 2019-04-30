@@ -291,7 +291,7 @@ def clusterEVwithQR(EV, randomized=False, gamma=4):
 # PART 3 -- Hierarchical spectral clustering and agglomeration
 ##############################################################
 
-def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='SBM', reps=10, noise=1e-3, Ks=None):
+def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='SBM', reps=10, noise=1e-2, Ks=None):
     """
     Performs a full round of hierarchical spectral clustering.
     Inputs:
@@ -342,7 +342,7 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-3, Ks=None, no_Ks_forward=True):
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-2, Ks=None, no_Ks_forward=True):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -415,6 +415,9 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
         if find_levels:
             errors, std_errors, hier_partition_vecs = identify_next_level(
                 Aagg, Ks, model=model, reg=False, norm='Fnew', reps=reps, noise=noise)
+
+            plt.figure(125)
+            plt.errorbar(Ks, errors,std_errors)
             # kmax = np.max(Ks)
             selected = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
             selected = selected -1
@@ -502,7 +505,7 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
     return Ks[:-1], [partition_vec]
 
 
-def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=1e-3):    
+def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=1e-2):    
     """
     Identify agglomeration levels by checking the projection errors and comparing the to a
     perturbed verstion of the same network
@@ -524,6 +527,8 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
 
     # first identify partitions and their projection error
     Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    plt.figure(125)
+    plt.plot(Ks, sum_errors2, 'o')
 
     # repeat with noise
     if reps > 0:
@@ -644,6 +649,10 @@ def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglom
     levels = [1,errors.size]
     expected_error = expected_errors_random_projection(errors.size,levels)
     next_level = find_smallest_relevant_minima_from_errors(errors,std_errors, expected_error)
+    plt.figure(222)
+    Ks = np.arange(expected_error.size) + 1
+    plt.plot(Ks,expected_error)
+    plt.errorbar(Ks,errors,std_errors)
     while next_level != -1:
         levels = levels + [next_level]
         levels.sort()
