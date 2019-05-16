@@ -18,7 +18,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
 
         for snr in np.arange(0.5, 10.5, 0.5):
 
-            print 'SNR', snr
+            print '\n\nSNR', snr
 
             if symmetric:
                 D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
@@ -78,7 +78,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', p
         for snr in np.arange(0.5, 10.5, 0.5):
             # for snr in np.arange(0.5,10.5,1):
 
-            print 'SNR', snr
+            print '\n\nSNR', snr
 
             if symmetric:
                 D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar,
@@ -137,7 +137,7 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
         # for snr in np.arange(2.5, 10.5, 0.5):
         for snr in np.arange(0.5, 10.5, 0.5):
 
-            print 'SNR', snr
+            print '\n\nSNR', snr
 
             if symmetric:
                 D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
@@ -179,11 +179,13 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
                 file.write('\n')
 
 
-def plot_levels(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"):
+def plot_levels(filename):
     # ~ groups_per_level=3
     # ~ n_levels=3
-    with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix, {True: 'sym', False: 'asym'}[symmetric], n_levels, groups_per_level)) as file:
-        results = file.readlines()
+    # with open('results/{}_knownK_inf_{}_{}_{}.txt'.format(prefix, {True: 'sym', False: 'asym'}[symmetric], n_levels, groups_per_level)) as file:
+    #     results = file.readlines()
+    with open(filename) as file:
+            results = file.readlines()
 
     scores = np.float64([result.strip().replace('*', '').split() for result in results])
 

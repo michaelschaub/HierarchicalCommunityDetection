@@ -14,22 +14,6 @@ from sklearn.cluster import KMeans
 from sklearn import preprocessing
 from helperfunctions import project_orthogonal_to, compute_number_links_between_groups, expand_partitions_to_full_graph
 
-def find_subspace_angle_between_ev_bases(U,V):
-    Q1 = U.T.dot(V)
-    sigma = scipy.linalg.svd(Q1, compute_uv=False)
-    ang = -np.ones(sigma.size)
-    cos_index = sigma**2 <= 0.5
-    if np.all(cos_index):
-        ang= np.arccos(sigma)
-    else:
-        Q2 = V - U.dot(Q1)
-        sigma2 = scipy.linalg.svd(Q2,compute_uv=False)
-        ang[cos_index] = np.arccos(sigma[cos_index])
-        sin_index = np.bitwise_not(cos_index)
-        ang[sin_index] = np.arcsin(sigma2[sin_index])
-
-    return ang, sigma
-
 def project_to(subspace_basis, vectors_to_project):
     """
     Subspace basis: linearly independent (not necessarily orthogonal or normalized)
@@ -54,7 +38,6 @@ def project_to(subspace_basis, vectors_to_project):
 
     return projected
 
-
 def calculate_proj_error3(evecs, H, norm):
     n, k = np.shape(H)
     if n == k:
@@ -68,30 +51,57 @@ def calculate_proj_error3(evecs, H, norm):
 
     return error
 
+def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='SBM', reps=10, noise=1e-2, Ks=None):
+    """
+    Performs a full round of hierarchical spectral clustering.
+    Inputs:
+        A -- sparse {0,1} adjacency matrix of network
+        first_pass -- spectral operator for the first pass partitioning
+        spectral_oper -- spectral operator for remaining passes over data
+        model -- parameter for spectral clustering
+        reps -- repetitions / number of samples drawn in bootstrap error test
+        noise -- corresponding noise parameter for bootstrap
+        Ks -- list of the partition sizes at each level 
+              (e.g. [3, 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
 
-def test_random_projection_with_kmeans2(n, k):
-    nsamples = 20
+    Output: list of hier. partitions
 
-    if n == k:
-        return 0, 0
+    The algorithm proceeds by
+    1) estimate the initial number of groups if Ks is not provided
+    2) get initial partition of the network using a method for clustering sparse networks
+    3) find partitions which fulfill the EEP criterion and agglomerate
+    """
 
-    error = np.zeros(nsamples)
-    clust = KMeans(n_clusters=k)
-    for i in range(nsamples):
-        # create k orthogonal vectors
-        V = ortho_group.rvs(dim=n)
-        V = V[:, :k]
-        clust.fit(V)
-        partition_vec = clust.labels_
-        partition_vec = spectral.relabel_partition_vec(partition_vec)
-        H = spectral.create_partition_matrix_from_vector(partition_vec)
-        H = preprocessing.normalize(H, axis=0, norm='l2')
-        error[i] = scipy.linalg.norm(project_orthogonal_to(H, V))
-
-    return error
+    # FIRST STEP -- estimate number of partitions
+    # If Ks is not specified then estimate the number of clusters using the Bethe Hessian
+    # TODO: atm just uses the Bethe Hessian to figure out the number of communities but
+    # then uses Rohe Laplacian to do the first inference step -- we can simplify to just
+    # use Bethe Hessian
+    if Ks is None:
+        p0 = spectral.spectral_partition(A, spectral_oper=first_pass, num_groups=-1)
+        Ks = []
+        Ks.append(np.max(p0) + 1)
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=1e-2, Ks=None, ind_levels_across_agg=True):
+    # SECOND STEP
+    # initial spectral clustering using spectral_oper; Lap == Rohe Laplacian
+    p0 = spectral.spectral_partition(A, spectral_oper=spectral_oper, num_groups=Ks[-1])
+
+    # if Ks only specifies number of clusters at finest level,
+    # set again to none for agglomeration
+    if len(Ks) == 1:
+        Ks = None
+    else:
+        Ks = Ks[:-1]
+
+    # THIRD STEP
+    # Now we build a list of all partitions
+    pvec_agg = hier_spectral_partition_agglomerate(
+        A, p0, spectral_oper=spectral_oper, model=model, reps=reps, noise=noise, Ks=Ks)
+
+    return pvec_agg
+
+def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=False):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -145,8 +155,9 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
     list_candidate_agglomeration = Ks
     while len(Ks) > 0:
 
-        print "List of partitions to assess: ", Ks, "\n"
+        print "\n\nList of partitions to assess: ", Ks, "\n"
         print "Current shape of network: ", A.shape, "\n"
+        print "Current levels: ", levels, "\n"
 
         # TODO The normalization seems important for good results -- why?
         # should we normalize by varaiance of Bernoullis as well?
@@ -159,52 +170,90 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
             plt.figure(125)
             plt.errorbar(Ks, errors,std_errors)
             # kmax = np.max(Ks)
-            selected = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
+            selected, below_thresh = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
             selected = selected -1
+            print "selected (before), ", selected
             selected = selected[:-1]
+            print "Ks: ", Ks, " selected: ", selected
             Ks = Ks[selected]
             print "Minima at", Ks
             hier_partition_vecs = [hier_partition_vecs[si] for si in selected]
         else:
-            k = Ks[0]
-            print "ERROR"
+            k = Ks[-1]
+            Ks, hier_partition_vecs = identify_partitions_at_level(
+                Aagg, Ks, model=model, reg=False)
 
         try:
             pvec.append(hier_partition_vecs[-1])
             partition = expand_partitions_to_full_graph(pvec)[-1]
 
-            # TODO: it might be useful to pass down candidates
-            # from previous agglomeration rounds here instead of starting from scratch!
             if find_levels:
                 if ind_levels_across_agg:
                     k = np.max(Ks)
                     Ks = np.arange(1, k+1)
                     list_candidate_agglomeration = Ks
                 else:
-                    list_candidate_agglomeration = Ks[selected]
+                # TODO: it might be useful to pass down candidates
+                # from previous agglomeration rounds here instead of starting from scratch!
+                    list_candidate_agglomeration = below_thresh + 1
                     print "updated list"
                     print list_candidate_agglomeration
                     k = np.max(Ks)
                     Ks = np.arange(1, k+1)
+
             levels.append(k)
             # if levels are not prespecified, reset candidates
             print 'partition into', k , ' groups'
             if k == 1:
                 Ks = []
 
-        # TODO: check below
-        # this exception occurs when there is only a single candidate partition
-        # and the error is not high enough
-        # Check if  not better described as: if there is *no candidate* partition
-        # (why only single candidate? why error not high enough -- low?!)
+        # this exception occurs *no candidate* partition (selected == [])
+        # and indicates that agglomeration has stopped
         except IndexError:
+            print "selectecd == [] ", selected
             pass
 
     print "HIER SPECTRAL PARTITION -- agglomerative\n Partitions into", levels, "groups \n"
 
-    return pvec[::-1]
-    # return expand_partitions_to_full_graph(pvec)[::-1]
+    # return pvec[::-1]
+    return expand_partitions_to_full_graph(pvec)[::-1]
 
+def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
+    """
+    For a given graph with (weighted) adjacency matrix A and list of
+    partition sizes to assess (Ks), find the partition of a given size Ks[0]
+    via the find_partition function using the model and regularization
+    provided.
+    Inputs:
+        A -- (agglomerated) adjacency matrix of network
+        Ks -- list of the partition sizes at each level 
+              (e.g. [3, 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
+        model -- parameter for spectral clustering
+        reg -- use regularization for spectral clustering?
+
+    Outputs:
+        Ks -- remaining list of group sizes to consider
+        partition_vec -- found partition at this level
+    """
+
+    # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
+    L = spectral.construct_graph_Laplacian(A)
+    Dtau_sqrt_inv = 0
+
+    # get eigenvectors
+    # input A may be a sparse scipy matrix or dense format numpy 2d array.
+    try:
+        ev, evecs = scipy.linalg.eigh(L)
+    except ValueError:
+        ev, evecs = scipy.sparse.linalg.eigsh(L, Ks[-1], which='SM', tol=1e-6)
+
+    index = np.argsort(np.abs(ev))
+    evecs = evecs[:, index]
+
+    # find the partition for Ks[-1] groups
+    partition_vec, Hnorm = spectral.find_partition(evecs, Ks[-1], model, Dtau_sqrt_inv)
+
+    return Ks[:-1], [partition_vec]
 
 def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=1e-2):
     """
@@ -238,7 +287,6 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', reps=20, noise=
     std_errors = np.sqrt(std_errors/(reps-1))
 
     return sum_errors, std_errors, partition_vecs
-
 
 def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', partition_vecs=[]):
     """
@@ -275,15 +323,12 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
 
         # calculate and store error
         error[ki] = calculate_proj_error3(evecs, Hnorm, norm)
-        # print("K, error ")
-        # print(k, error[ki])
 
         # save partition
         if partitions_unknown:
             partition_vecs.append(partition_vec)
 
     return Ks, error, partition_vecs
-
 
 def expected_errors_random_projection(dim_n,levels):
     """
@@ -302,45 +347,75 @@ def expected_errors_random_projection(dim_n,levels):
     return expected_error
 
 def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
-    #TODO: how to choose the threshold?
-    relerror = np.zeros(expected_error.size)
+    #TODO: how to choose the threshold? 
+    relerror = np.zeros(expected_error.size) 
+    ratio_error = np.zeros(expected_error.size) 
+
+    # find points below relative error
     nonzero = expected_error != 0
-    relerror[nonzero] = (errors[nonzero] + 2*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
+    relerror[nonzero] = (errors[nonzero] + 3*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
     threshold = -0.5
-    local_min = argrelmin(relerror)[0]
     below_thresh = np.nonzero(relerror < threshold)[0]
+
+    # find relative minima
+    ratio_error[nonzero] = (errors[nonzero] + 3*std_errors[nonzero])/ expected_error[nonzero]
+    local_min = argrelmin(ratio_error)[0]
+    plt.figure(12)
+    plt.plot(np.arange(1,ratio_error.size+1),ratio_error)
+
+    # levels == below thres && local min
     levels = np.intersect1d(local_min, below_thresh).astype(int)
+
+    # remove already found local minima from list
+    Ks = np.arange(errors.size)
+    levels = np.intersect1d(levels, Ks[nonzero]).astype(int)
+
     Ks = np.arange(1, errors.size+1)
-    print "Ks, local_min, below_thresh"
-    print Ks, Ks[local_min], Ks[below_thresh]
+    print "Ks, local_min, below_thresh, levels"
+    print Ks, Ks[local_min], Ks[below_thresh], Ks[levels]
     best_level = -1
     if levels.size > 0:
         best_level = levels[np.argmin(relerror[levels])]+1
         print "agglomeration level candidate"
         print best_level
 
-    plt.figure(9)
-    plt.plot(np.arange(1,errors.size+1), relerror)
-    return best_level
+    # plt.figure(9)
+    # plt.plot(np.arange(1,errors.size+1), relerror)
+    return best_level, below_thresh
 
 def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration):
+    """Given a set of error and standard deviations, find best minima"""
     levels = [1,errors.size]
     expected_error = expected_errors_random_projection(errors.size,levels)
+
+    # plot candidate levels vs. errors
     plt.figure(222)
     Ks = np.arange(expected_error.size) + 1
     plt.plot(Ks,expected_error)
     plt.errorbar(Ks,errors,std_errors)
-    next_level = find_smallest_relevant_minima_from_errors(errors,std_errors, expected_error)
+
+    next_level, below_thresh = find_smallest_relevant_minima_from_errors(errors,std_errors, expected_error)
     while next_level != -1:
         levels = levels + [next_level]
         levels.sort()
         expected_error = expected_errors_random_projection(errors.size, levels)
-        next_level = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
+        next_level, below_thresh2 = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
 
     print "list_candidate_agglomeration"
     print list_candidate_agglomeration
+    print "levels"
+    print levels
     levels = np.intersect1d(np.array(levels),list_candidate_agglomeration)
-    return np.array(levels)
+    print "levels updated"
+    print levels
+
+    # remove again the level 1 entry
+    if levels[0] == 1:
+        levels = levels[1:]
+    print "levels returned"
+    print np.array(levels)
+
+    return np.array(levels), below_thresh
 
 def create_agglomerated_graphGHRG(groups_per_level=3,n_levels=3,n=3**9, snr=6.5):
     c_bar = 30
@@ -363,7 +438,7 @@ def compare_agglomeration_variants():
     plt.close("all")
     # Create an aggregated graph as we would have in the test loop
     # and check current agglomeration practise
-    Aagg, Aorg, true_pvec = create_agglomerated_graphGHRG(snr=1)
+    Aagg, Aorg, true_pvec = create_agglomerated_graphGHRG(snr=3.5)
     pvec_inf = spectral.hier_spectral_partition_agglomerate(Aorg, true_pvec[-1],
                                                             spectral_oper="Lap",
                                                             model='SBM',
@@ -425,6 +500,181 @@ def compare_agglomeration_variants():
     pvec_inf = hier_spectral_partition_agglomerate(Aorg, true_pvec[-1],
                                                    spectral_oper="Lap", model='SBM',
                                                    reps=10, noise=1e-2, Ks=None)
+
+    print "INFERRED PARTITION2, TRUE PARTITION"
+    print[len(np.unique(pv)) for pv in pvec_inf]
+    print[len(np.unique(pv)) for pv in true_pvec]
+    for p in pvec_inf:
+        print p
+
+
+def compare_agglomeration_variants_k_given():
+    """ Compare various agglomeration techniques"""
+
+    plt.close("all")
+
+    # Create an aggregated graph as we would have in the test loop
+    # and check current agglomeration practise
+    n = 3**9
+    groups_per_level = 3 
+    n_levels = 3
+    snr = 3.5
+    c_bar = 30
+    D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
+    # generate graph and create adjacency
+    G = D_actual.generateNetworkExactProb()
+    Aorg = D_actual.to_scipy_sparse_matrix(G)
+    # get true hierarchy
+    true_pvec = D_actual.get_partition_all()
+    true_part = [len(np.unique(pv)) for pv in true_pvec][::-1]
+    print true_part
+    Eagg, Nagg = compute_number_links_between_groups(Aorg, true_pvec[-1])
+    Aagg = Eagg / Nagg
+
+    print "Start spec. clust"
+    pvec_inf = spectral.hier_spectral_partition(Aorg,
+                                                spectral_oper="Lap",
+                                                first_pass="Bethe",
+                                                model='SBM',
+                                                reps=10,
+                                                noise=1e-2,
+                                                Ks=true_part)
+    score_matrix = metrics.calculate_level_comparison_matrix(pvec_inf, true_pvec)
+    print score_matrix
+    precision, recall = metrics.calculate_precision_recall(score_matrix)
+    bottom_lvl = score_matrix[-1, -1]
+    print "\n\nRESULTS\n\nbottom level"
+    print bottom_lvl
+    print len(pvec_inf), len(true_pvec)
+    print "precision, recall"
+    print precision, recall
+
+    print "INFERRED PARTITION OLD, TRUE PARTITION"
+    old_part = [len(np.unique(pv)) for pv in pvec_inf]
+    true_part = [len(np.unique(pv)) for pv in true_pvec]
+    print old_part
+    print true_part
+    if old_part == true_part:
+        print "Nothing interesting happening" 
+
+    plt.close('all')
+    plt.figure()
+    plt.imshow(Aagg-np.diag(np.diag(Aagg)))
+
+    L = spectral.construct_graph_Laplacian(Aagg)
+    ev, evecs = scipy.linalg.eigh(L)
+    plt.figure()
+    plt.plot(ev, 'x')
+
+    print "\n\n START NEW TESTS FULL"
+    # WITH INTERMEDIATE AGGREGATION
+    pvec_inf = hier_spectral_partition(Aorg, spectral_oper="Lap",
+                                                first_pass="Bethe",
+                                                model='SBM',
+                                                reps=10,
+                                                noise=1e-2,
+                                                Ks=true_part)
+
+    score_matrix = metrics.calculate_level_comparison_matrix(pvec_inf, true_pvec)
+    print score_matrix
+    precision, recall = metrics.calculate_precision_recall(score_matrix)
+    bottom_lvl = score_matrix[-1, -1]
+    print "\n\nRESULTS\n\nbottom level"
+    print bottom_lvl
+    print len(pvec_inf), len(true_pvec)
+    print "precision, recall"
+    print precision, recall
+
+    print "INFERRED PARTITION2, TRUE PARTITION"
+    print[len(np.unique(pv)) for pv in pvec_inf]
+    print[len(np.unique(pv)) for pv in true_pvec]
+    for p in pvec_inf:
+        print p
+
+    print "\n\n START NEW TESTS 2"
+    # WITH INTERMEDIATE AGGREGATION
+    print true_part[0]
+    print true_pvec[0]
+    pvec_inf = spectral.spectral_partition(Aorg, spectral_oper="Lap", num_groups=true_part[0])
+
+    score_matrix = metrics.overlap_score(true_pvec[0],pvec_inf)
+    print score_matrix
+
+
+
+def compare_agglomeration_variants_full():
+    """ Compare various agglomeration techniques"""
+
+    plt.close("all")
+
+    # Create an aggregated graph as we would have in the test loop
+    # and check current agglomeration practise
+    n = 3**9
+    groups_per_level = 3 
+    n_levels = 3
+    snr = 4
+    c_bar = 30
+    D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
+    # generate graph and create adjacency
+    G = D_actual.generateNetworkExactProb()
+    Aorg = D_actual.to_scipy_sparse_matrix(G)
+    # get true hierarchy
+    true_pvec = D_actual.get_partition_all()
+    Eagg, Nagg = compute_number_links_between_groups(Aorg, true_pvec[-1])
+    Aagg = Eagg / Nagg
+
+    pvec_inf = spectral.hier_spectral_partition(Aorg,
+                                                spectral_oper="Lap",
+                                                first_pass="Bethe",
+                                                model='SBM',
+                                                reps=10,
+                                                noise=1e-2,
+                                                Ks=None)
+    score_matrix = metrics.calculate_level_comparison_matrix(pvec_inf, true_pvec)
+    print score_matrix
+    precision, recall = metrics.calculate_precision_recall(score_matrix)
+    bottom_lvl = score_matrix[-1, -1]
+    print "\n\nRESULTS\n\nbottom level"
+    print bottom_lvl
+    print len(pvec_inf), len(true_pvec)
+    print "precision, recall"
+    print precision, recall
+
+    print "INFERRED PARTITION OLD, TRUE PARTITION"
+    old_part = [len(np.unique(pv)) for pv in pvec_inf]
+    true_part = [len(np.unique(pv)) for pv in true_pvec]
+    print old_part
+    print true_part
+    if old_part == true_part:
+        print "Nothing interesting happening" 
+
+    plt.close('all')
+    plt.figure()
+    plt.imshow(Aagg-np.diag(np.diag(Aagg)))
+
+    L = spectral.construct_graph_Laplacian(Aagg)
+    ev, evecs = scipy.linalg.eigh(L)
+    plt.figure()
+    plt.plot(ev, 'x')
+
+    print "\n\n\n\n\n START NEW TESTS FULL"
+    # WITH INTERMEDIATE AGGREGATION
+    pvec_inf = hier_spectral_partition(Aorg, spectral_oper="Lap",
+                                                first_pass="Bethe",
+                                                model='SBM',
+                                                reps=10,
+                                                noise=1e-2,
+                                                Ks=None)
+
+    score_matrix = metrics.calculate_level_comparison_matrix(pvec_inf, true_pvec)
+    print score_matrix
+    precision, recall = metrics.calculate_precision_recall(score_matrix)
+    bottom_lvl = score_matrix[-1, -1]
+    print "\n\nRESULTS\n\nbottom level"
+    print bottom_lvl
+    print len(pvec_inf), len(true_pvec)
+    print "precision, recall"
+    print precision, recall
 
     print "INFERRED PARTITION2, TRUE PARTITION"
     print[len(np.unique(pv)) for pv in pvec_inf]
