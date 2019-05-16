@@ -63,7 +63,7 @@ def complete_inf(groups_per_level=3, n_levels=3,prefix="results",version="new"):
 
 
 
-def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', prefix="results"):
+def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', prefix="results", version="new"):
     n = 3**9
 
     c_bar = 50
