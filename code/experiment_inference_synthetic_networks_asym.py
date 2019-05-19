@@ -91,6 +91,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', p
 
             # infer partitions with no noise
             if version == "new":
+                Ks = Ks[::-1]
                 inf_pvec = spectral_new.hier_spectral_partition(A, Ks=Ks, model=model)
             else:
                 inf_pvec = spectral.hier_spectral_partition(A, Ks=Ks, model=model)

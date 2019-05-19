@@ -3,6 +3,8 @@ import numpy as np
 from scipy import sparse
 import scipy
 from scipy.optimize import linear_sum_assignment
+from clusim.clustering import Clustering, print_clustering
+from clusim.sim import vi, nmi
 
 """
 The metrics module computes various comparisons and scores of alignment between different
@@ -42,6 +44,30 @@ def calcVI(partitions):
 
     return vi_mat
 
+def variation_of_information_sim(partition1,partition2):
+    """ 
+    Compute 1 minus the normalized variation of information vi \in [0,1] between two partition
+    1-vi = 1 -> perfect recovery
+    1-vi = 0 -> worst possible result
+    """
+    nnodes = partition1.size
+    clu1 = Clustering()
+    clu1.from_membership_list(partition1)
+    clu2 = Clustering()
+    clu2.from_membership_list(partition2)
+    varinf = vi(clu1,clu2) / np.log(nnodes)
+    return 1-varinf
+
+def normalize_mutual_information(partition1,partition2):
+    """ 
+    Compute the normalized mutual information between two partitions
+    """
+    clu1 = Clustering()
+    clu1.from_membership_list(partition1)
+    clu2 = Clustering()
+    clu2.from_membership_list(partition2)
+    normalized_MI = nmi(clu1,clu2)
+    return normalized_MI
 
 def fraction_correctly_aligned(partition1,partition2):
     """
@@ -83,7 +109,7 @@ def overlap_score(partition, true_partition):
     return overlap_score
 
 
-def calculate_level_comparison_matrix(pvecs,true_pvecs,score=overlap_score):
+def calculate_level_comparison_matrix(pvecs,true_pvecs,score=normalize_mutual_information):
     """
     Compare the partition at each level of a heirarchy with each level of the true hierarchy.
     Default score is the overlap_score.
