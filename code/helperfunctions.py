@@ -106,7 +106,9 @@ def create_normed_partition_matrix_from_vector(partition_vec, mode):
 
 
 def calculate_proj_error(evecs, H, norm):
-    """ Given a set of eigenvectors and a partition matrix, try project compute the alignment between those two subpacees by computing the projection (errors) of one into the other"""
+    """ Given a set of eigenvectors and a partition matrix, 
+    try project compute the alignment between those two subpacees
+    by computing the projection (errors) of one into the other"""
     n, k = np.shape(H)
     if n == k:
         error = 0
@@ -124,8 +126,8 @@ def calculate_proj_error(evecs, H, norm):
         norm2 = scipy.linalg.norm(proj2, 2)
         error = .5 * (norm1 + norm2)
     elif norm == 'Fnew':
-        norm1 = scipy.linalg.norm(proj1) 
-        error = norm1 
+        norm1 = scipy.linalg.norm(proj1)
+        error = norm1
 
     return error
 

@@ -96,34 +96,6 @@ def build_BetheHessian(A, r):
     B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0)
     return B
 
-
-def build_weighted_BetheHessian(A,r):
-    """
-    Construct weigthed Bethe Hessian as discussed in Saade et al.
-    """
-    if not scipy.sparse.issparse(A):
-        print "Input matrix not in sparse format, transforming to sparse matrix"
-        A = scipy.sparse.csr_matrix(A)
-
-    # we are interested in A^.2 (elementwise)
-    A2data = A.data **2
-
-    new_data = A2data / (r*r -A2data)
-    A2 = scipy.sparse.csr_matrix((new_data,A.nonzero()),shape=A.shape)
-
-    # diagonal matrix
-    d = 1 + A2.sum(axis=1)
-    d = d.getA().flatten()
-    DD = scipy.sparse.diags(d,0)
-
-    # second matrix
-    rA_data = r*A.data / (r*r - A2data)
-    rA = scipy.sparse.csr_matrix((rA_data,A.nonzero()),shape=A.shape)
-
-    # full Bethe Hessian
-    BHw = DD - rA
-    return BHw
-
 ############################################
 # PART 2 -- single pass spectral clustering
 ############################################
@@ -144,7 +116,7 @@ def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
             partition, _ = regularized_laplacian_spectral_clustering(A, num_groups=num_groups)
 
     elif spectral_oper == "Bethe":
-        partition = cluster_with_BetheHessian(A, num_groups=num_groups, mode='unweighted', regularizer=regularizer)
+        partition = cluster_with_BetheHessian(A, num_groups=num_groups, regularizer=regularizer)
 
     else:
         raise ValueError("mode '%s' not recognised - available modes are 'Lap', Bethe'" % spectral_oper)
@@ -209,7 +181,7 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1, clustermo
     return partition_vector, evecs
 
 
-def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighted', clustermode='kmeans'):
+def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', clustermode='kmeans'):
     """
     Perform one round of spectral clustering using the Bethe Hessian
     """
@@ -230,15 +202,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
         return partition_vector
 
     # construct both the positive and the negative variant of the BH
-    if mode == 'unweighted':
-        BH_pos = build_BetheHessian(A, r)
-        BH_neg = build_BetheHessian(A, -r)
-    elif mode == 'weighted':
-        BH_pos = build_weighted_BetheHessian(A, r)
-        BH_neg = build_weighted_BetheHessian(A, -r)
-    else:
-        print "Something went wrong"
-        return -1
+    BH_pos = build_BetheHessian(A, r)
+    BH_neg = build_BetheHessian(A, -r)
 
     if num_groups == -1:
         relevant_ev, lambda1 = find_negative_eigenvectors(BH_pos)
@@ -676,7 +641,7 @@ def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglom
         levels = levels + [next_level]
         levels.sort()
         expected_error = expected_errors_random_projection(errors.size, levels)
-        next_level, below_thresh2 = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
+        next_level, _ = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
 
     print "list_candidate_agglomeration"
     print list_candidate_agglomeration
@@ -704,7 +669,8 @@ def find_partition(evecs, k, model, Dtau_sqrt_inv, method='GMMspherical', n_init
         X = preprocessing.normalize(V, axis=1, norm='l2')
     elif model == 'SBM':
         # X = Dtau_sqrt_inv* V
-        X = V
+        # X = V
+        X = preprocessing.normalize(V, axis=1, norm='l2')
     else:
         print('something went wrong. Please specify valid mode')
         return -999
