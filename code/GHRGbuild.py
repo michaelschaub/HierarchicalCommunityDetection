@@ -66,7 +66,7 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level,symmetric=True):
         if np.floor(n_this_level) != n_this_level:
             print "Rounding number of nodes"
         c_bar=(cin/n_this_level)*(n_this_level / float(groups_per_level))
-        #~ print omega[level]
+        # print omega[level]
 
 
     D=GHRGmodel.GHRG()
@@ -137,8 +137,6 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
     omega={}
     n_this_level = n
     for level in xrange(n_levels):
-        # cin, cout = calculateDegrees(cm,ratio,groups_per_level)
-        #~ cin, cout = sample_networks.calculateDegreesFromSNR(snr,ratio,groups_per_level)
         cin, cout = calculateDegreesFromAvDegAndSNR(snr,c_bar,groups_per_level)
         print "Hierarchy Level: ", level, '| KS Detectable: ', snr >=1, "| Link Probabilities in / out per block: ", cin/n_this_level,cout/n_this_level
         # Omega is assigned on a block level, i.e. for each level we have one omega array
@@ -151,7 +149,7 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
         if np.floor(n_this_level) != n_this_level:
             print "Rounding number of nodes"
         c_bar=(cin/n_this_level)*(n_this_level / float(groups_per_level))
-        # print omega[level]
+        print omega[level]
 
 
     D=GHRGmodel.GHRG()
@@ -171,6 +169,7 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
     D.node[D.root_node]['n'] = n
 
     # split network into groups -- add children in dendrogram
+    # this is the first split into groups per level
     nodes_this_level = D.add_children(D.root_node, groups_per_level)
     for ci, child in enumerate(nodes_this_level):
         D.node[child]['nnodes'] = D.node[D.root_node]['nnodes'][int(ci*n/groups_per_level):int((ci+1)*n/groups_per_level)]
@@ -179,7 +178,7 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
     #construct dendrogram breadth first
     for nl in xrange(n_levels-1):
         # print nodes_this_level
-        nodes_last_level=list([nodes_this_level[0]])
+        nodes_last_level=list([nodes_this_level[-1]])
         nodes_this_level=[]
         for parent in nodes_last_level:
             children=D.add_children(parent, groups_per_level)

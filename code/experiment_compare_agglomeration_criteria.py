@@ -480,7 +480,7 @@ def compare_agglomeration_variants():
     # expected_error = np.sqrt((Ks - 1)*(kmax-Ks) / (kmax))
     # plt.plot(Ks, expected_error)
 
-    levels = find_all_relevant_minima_from_errors(errors,std_errors,Ks)
+    levels, _ = find_all_relevant_minima_from_errors(errors,std_errors,Ks)
 
     print "\n\nINFERRED LEVELS ONE-SHOT"
     print levels
