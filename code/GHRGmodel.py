@@ -245,6 +245,24 @@ class GHRG(nx.DiGraph):
                         omega[np.ix_(seti,setj)] = Er[ii,jj]/Nr[ii,jj]
         return omega
 
+    def checkDetectabliityGeneralSBM(self):
+        """
+        Given a SBM with affinity matrix omega and group size distribuution nc, compute
+        whether there is something detectable here.
+        """
+
+        omega = self.construct_full_block_params()
+        pvec = self.get_partition_at_level(-1)[0]
+        nc = [sum(pvec == i) for i in xrange(pvec.max() + 1)]
+        # form matrix M
+        M = omega.dot(np.diag(nc,0))
+        u = scipy.linalg.eigvals(M)
+        idx = u.argsort()[::-1]
+        eigenvalues = u[idx]
+
+        snr = eigenvalues[1]**2 / eigenvalues[0]
+
+        return snr
     ##
     ## PART 3 --- SAMPLING FUNCTIONS
 

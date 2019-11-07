@@ -598,11 +598,14 @@ def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
     relerror[nonzero] = (errors[nonzero] + 3*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
     threshold = -0.5
     below_thresh = np.nonzero(relerror < threshold)[0]
+    plt.figure(12)
+    plt.plot(np.arange(1,relerror.size+1),relerror)
+    plt.plot(np.arange(1,relerror.size+1),threshold*np.ones(relerror.size))
 
     # find relative minima
     ratio_error[nonzero] = (errors[nonzero] + 3*std_errors[nonzero])/ expected_error[nonzero]
     local_min = argrelmin(ratio_error)[0]
-    plt.figure(12)
+    plt.figure(13)
     plt.plot(np.arange(1,ratio_error.size+1),ratio_error)
 
     # levels == below thres && local min

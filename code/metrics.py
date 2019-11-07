@@ -5,6 +5,7 @@ import scipy
 from scipy.optimize import linear_sum_assignment
 from clusim.clustering import Clustering, print_clustering
 from clusim.sim import vi, nmi, adj_mi
+from sklearn.metrics.cluster import adjusted_mutual_info_score
 
 """
 The metrics module computes various comparisons and scores of alignment between different
@@ -69,18 +70,6 @@ def normalize_mutual_information(partition1,partition2):
     normalized_MI = nmi(clu1,clu2)
     return normalized_MI
 
-def adjusted_mutual_information(partition1,partition2):
-    """ 
-    Compute the adjusted mutual information between two partitions
-    using the one-sided all to all model (compare Gates et al., JLMR 2017)
-    """
-    clu1 = Clustering()
-    clu1.from_membership_list(partition1)
-    clu2 = Clustering()
-    clu2.from_membership_list(partition2)
-    normalized_MI = adj_mi(clu1,clu2,random_model="all1")
-    return normalized_MI
-
 def fraction_correctly_aligned(partition1,partition2):
     """
     Compares two partitions and computes the fraction of nodes in partition1 that can be
@@ -121,7 +110,7 @@ def overlap_score(partition, true_partition):
     return overlap_score
 
 
-def calculate_level_comparison_matrix(pvecs,true_pvecs,score=adjusted_mutual_information):
+def calculate_level_comparison_matrix(pvecs,true_pvecs,score=adjusted_mutual_info_score):
     """
     Compare the partition at each level of a heirarchy with each level of the true hierarchy.
     Default score is the overlap_score.
