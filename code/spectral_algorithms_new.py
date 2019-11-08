@@ -267,8 +267,8 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
     Performs a full round of hierarchical spectral clustering.
     Inputs:
         A -- sparse {0,1} adjacency matrix of network
-        first_pass -- spectral operator for the first pass partitioning
-        spectral_oper -- spectral operator for remaining passes over data
+        first_pass -- spectral operator for model selection
+        spectral_oper -- spectral operator for initial clustering
         model -- parameter for spectral clustering
         reps -- repetitions / number of samples drawn in bootstrap error test
         noise -- corresponding noise parameter for bootstrap
@@ -285,18 +285,17 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
 
     # FIRST STEP -- estimate number of partitions
     # If Ks is not specified then estimate the number of clusters using the Bethe Hessian
-    # TODO: atm just uses the Bethe Hessian to figure out the number of communities but
-    # then uses Rohe Laplacian to do the first inference step -- we can simplify to just
-    # use Bethe Hessian
+    # SECOND STEP
+    # initial spectral clustering using spectral_oper; Lap == Rohe Laplacian
     if Ks is None:
         p0 = spectral_partition(A, spectral_oper=first_pass, num_groups=-1)
         Ks = []
         Ks.append(np.max(p0) + 1)
-
-
-    # SECOND STEP
-    # initial spectral clustering using spectral_oper; Lap == Rohe Laplacian
-    p0 = spectral_partition(A, spectral_oper=spectral_oper, num_groups=Ks[-1])
+    if spectral_oper != first_pass:
+        p0 = spectral_partition(A, spectral_oper=spectral_oper, num_groups=Ks[-1])
+    # TODO: atm just uses the Bethe Hessian to figure out the number of communities but
+    # then uses Rohe Laplacian to do the first inference step -- we can simplify to just
+    # use Bethe Hessian
 
     # if Ks only specifies number of clusters at finest level,
     # set again to none for agglomeration
@@ -307,13 +306,12 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
 
     # THIRD STEP
     # Now we build a list of all partitions
-    pvec_agg = hier_spectral_partition_agglomerate(
-        A, p0, spectral_oper=spectral_oper, model=model, reps=reps, noise=noise, Ks=Ks)
+    pvec_agg = hier_spectral_partition_agglomerate(A, p0, model=model, reps=reps, noise=noise, Ks=Ks)
 
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=False):
+def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=False):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -342,7 +340,6 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap", model
     according to which we agglomerate the network and start again from 1)
     """
     # TODO: the following options are not really made use / unclear effect
-    # spectral_oper -- spectral operator used to perform clustering not used atm
     # model -- parameter for spectral clustering
 
     # k ==  number of groups == max index of partition +1
