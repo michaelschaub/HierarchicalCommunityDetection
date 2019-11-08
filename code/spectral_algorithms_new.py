@@ -262,7 +262,7 @@ def clusterEVwithQR(EV, randomized=False, gamma=4):
 # PART 3 -- Hierarchical spectral clustering and agglomeration
 ##############################################################
 
-def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='SBM', reps=10, noise=2e-2, Ks=None):
+def hier_spectral_partition(A, spectral_oper='Bethe', first_pass='Bethe', model='SBM', reps=10, noise=2e-2, Ks=None):
     """
     Performs a full round of hierarchical spectral clustering.
     Inputs:
