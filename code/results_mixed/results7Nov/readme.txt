@@ -1,0 +1,2 @@
+commit 39cdffb3611c146db4c0fd4963bec419f00a924d
+testing new adjusted mutual information measure

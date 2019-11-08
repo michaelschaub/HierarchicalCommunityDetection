@@ -556,7 +556,7 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', p
     # find partitions and their error for each k
     for ki, k in enumerate(Ks):
         if partitions_unknown:
-            partition_vec, Hnorm = find_partition(evecs, k, model, Dtau_sqrt_inv, method='GMMspherical')
+            partition_vec, Hnorm = find_partition(evecs, k, model, Dtau_sqrt_inv)
         else:
             partition_vec = partition_vecs[ki]
             Hnorm = create_normed_partition_matrix_from_vector(partition_vec, model)
@@ -682,7 +682,7 @@ def find_partition(evecs, k, model, Dtau_sqrt_inv, method='GMMspherical', n_init
     if method == 'QR':
         partition_vec = clusterEVwithQR(X)
     elif method == 'KM':
-        clust = KMeans(n_clusters=k, n_init=n_init)
+        clust = KMeans(n_clusters=k, n_init=n_init,n_jobs=2)
         clust.fit(X)
         partition_vec = clust.labels_
         partition_vec = relabel_partition_vec(partition_vec)
