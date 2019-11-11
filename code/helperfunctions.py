@@ -127,7 +127,7 @@ def calculate_proj_error(evecs, H, norm):
         error = .5 * (norm1 + norm2)
     elif norm == 'Fnew':
         norm1 = scipy.linalg.norm(proj1)
-        error = norm1
+        error = norm1**2
 
     return error
 
@@ -255,7 +255,7 @@ def orthogonalizeQR_randomized(EV, gamma=4):
     elements = np.random.choice(elements, count, p=probabilities)
     elements = scipy.unique(elements)
 
-    Q, R, P = scipy.linalg.qr(EV[elements, :].T, mode='economic', pivoting=True)
+    Q, _, P = scipy.linalg.qr(EV[elements, :].T, mode='economic', pivoting=True)
     # get indices of k representative points
     P = P[:k]
 

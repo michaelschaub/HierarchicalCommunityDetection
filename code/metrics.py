@@ -25,12 +25,12 @@ def calcVI(partitions):
 
 
     for i in xrange(num_partitions):
-        A1 = sparse.coo_matrix((np.ones(n),(partitions[i,:],nodes)),shape=(c,n),dtype=np.uint).tocsc()
+        A1 = sparse.coo_matrix((np.ones(n),(partitions[i,:],nodes)),shape=(c,n),dtype=np.uint8).tocsc()
         n1all = np.array(A1.sum(1),dtype=float)
 
         for j in xrange(i):
 
-            A2 = sparse.coo_matrix((np.ones(n),(nodes,partitions[j,:])),shape=(n,c),dtype=np.uint).tocsc()
+            A2 = sparse.coo_matrix((np.ones(n),(nodes,partitions[j,:])),shape=(n,c),dtype=np.uint8).tocsc()
             n2all = np.array(A2.sum(0),dtype=float)
 
             n12all = np.array(A1.dot(A2).todense(),dtype=float)

@@ -498,7 +498,7 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
     """
 
     # first identify partitions and their projection error
-    Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    Ks, _, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
     # plt.figure(125)
     # plt.plot(Ks, sum_errors2, 'o')
 
@@ -580,7 +580,7 @@ def expected_errors_random_projection(dim_n,levels):
     expected_error = []
     for i,j in start_end_pairs:
         Ks = np.arange(i,j)
-        errors = np.sqrt((Ks - i) * (j - Ks) / dim_n)
+        errors = (Ks - i) * (j - Ks) / dim_n
         expected_error = np.hstack([expected_error,errors])
     expected_error = np.hstack([expected_error,0])
     return expected_error

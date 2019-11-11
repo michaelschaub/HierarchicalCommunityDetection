@@ -18,7 +18,7 @@ def calculateDegreesFromSNR(snr,ratio=0.5,num_cluster=2):
     # SNR = a^2 *(1-r)^2 / (ka + k(k-1)*ra)
     # SNR = a * (1-r)^2 / (k + k(k-1)*r)
     # a = SNR * (k + k(k-1)*r) / (1-r)^2
-    a = snr * (num_cluster + num_cluster*(num_cluster-1)*ratio) / float((1-ratio)**2);
+    a = snr * (num_cluster + num_cluster*(num_cluster-1)*ratio) / float((1-ratio)**2)
     b = ratio*a;
 
     return a, b
