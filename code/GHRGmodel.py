@@ -3,7 +3,6 @@ import networkx as nx
 import numpy as np
 import scipy.sparse
 from itertools import izip
-import spectral_algorithms as spectral
 
 
 """

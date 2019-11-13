@@ -79,7 +79,7 @@ def create_partition_matrix_from_vector(partition_vec):
     be ignored and can be used to denote unasigned nodes.
     """
     nr_nodes = partition_vec.size
-    k = len(np.unique(partition_vec))
+    k=np.max(partition_vec)+1 
 
     partition_matrix = scipy.sparse.coo_matrix(
         (np.ones(nr_nodes), (np.arange(nr_nodes), partition_vec)), shape=(
@@ -105,7 +105,7 @@ def create_normed_partition_matrix_from_vector(partition_vec, mode):
     return preprocessing.normalize(H, axis=0, norm='l2')
 
 
-def calculate_proj_error(evecs, H, norm):
+def calculate_proj_error(evecs, H, norm="Fnew"):
     """ Given a set of eigenvectors and a partition matrix, 
     try project compute the alignment between those two subpacees
     by computing the projection (errors) of one into the other"""
@@ -115,19 +115,12 @@ def calculate_proj_error(evecs, H, norm):
         return error
     V = evecs[:, :k]
     proj1 = project_orthogonal_to(H, V)
-    proj2 = project_orthogonal_to(V, H)
 
-    if norm == 'F':
-        norm1 = scipy.linalg.norm(proj1) / np.sqrt(k - k**2 / n)
-        norm2 = scipy.linalg.norm(proj2) / np.sqrt(k - k**2 / n)
-        error = 0.5 * (norm1 + norm2)
-    elif norm == '2':
-        norm1 = scipy.linalg.norm(proj1, 2)
-        norm2 = scipy.linalg.norm(proj2, 2)
-        error = .5 * (norm1 + norm2)
-    elif norm == 'Fnew':
+    if norm == 'Fnew':
         norm1 = scipy.linalg.norm(proj1)
         error = norm1**2
+    else:
+        raise ValueError("Not defined")
 
     return error
 
@@ -141,7 +134,7 @@ def project_orthogonal_to(subspace_basis, vectors_to_project):
 
     compute S*(S^T*S)^{-1}*S' * V
     """
-
+    # TODO -- check how we can avoid some of these transformations
     if not scipy.sparse.issparse(vectors_to_project):
         V = np.matrix(vectors_to_project)
     else:
@@ -356,54 +349,3 @@ def test_sparse_and_transform(A):
         print "Input matrix not in sparse format, transforming to sparse matrix"
         A = scipy.sparse.csr_matrix(A)
     return A
-
-
-def find_local_minima(vec):
-    """find local minimum in a vector"""
-    # TODO: check if this function can be replaced by argrelmin of scipy...
-
-    # difference of errors err_k - err_{k+1}
-    vec_diff = np.copy(vec)
-    vec_diff[1:] -= vec_diff[:-1]
-
-    # find sign of vector
-    sign = np.sign(vec_diff)
-    # shift 0's (no difference) to positive
-    sign[sign == 0] = 1
-
-    sign_diff = np.diff(sign)
-    goes_neg = (sign_diff == -2).nonzero()[0] + 1
-    goes_pos = (sign_diff == 2).nonzero()[0] + 1
-
-    # print "VEC", vec
-    # print vec_diff
-    # print sign_diff
-    # print goes_neg
-    # print goes_pos
-
-    # sometimes there are no sign changes
-    try:
-        if goes_neg[0] < goes_pos[0]:
-            segments = zip(goes_neg, goes_pos)
-            if len(goes_neg) > len(goes_pos):
-                segments.append((goes_neg[-1], len(vec)))
-        else:
-            segments = zip(np.append(0, goes_neg), goes_pos)
-    # catches no sign or single sign change
-    except IndexError:
-        # print "IndexError due to <=1 sign change"
-        # check if the minimum corresponds to a local minimum
-        # i.e. does min of vec correspond to -ve in vec_diff
-        if vec_diff[np.argmin(vec)] < 0:
-            return np.array([np.argmin(vec)])
-        # otherwise return empty set
-        else:
-            return np.array([], dtype=int)
-
-    minima = []
-    # print "SEG", segments
-
-    for seg in segments:
-        minima.append(seg[0] + np.argmin(vec[seg[0]:seg[1]]))
-
-    return np.array(minima)

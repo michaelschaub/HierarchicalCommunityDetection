@@ -3,9 +3,10 @@ import numpy as np
 from scipy import sparse
 import scipy
 from scipy.optimize import linear_sum_assignment
-from clusim.clustering import Clustering, print_clustering
-from clusim.sim import vi, nmi, adj_mi
+from clusim.clustering import Clustering
+from clusim.sim import vi, nmi 
 from sklearn.metrics.cluster import adjusted_mutual_info_score
+from helperfunctions import create_partition_matrix_from_vector
 
 """
 The metrics module computes various comparisons and scores of alignment between different
@@ -143,18 +144,3 @@ def compare_levels(true_pvec,inf_pvec):
     match = [np.argmin(np.abs(inf_levels-tl)) for tl in true_levels]
     diff = [inf_levels[mi]-tl for mi,tl in zip(match,true_levels)]
     return diff
-
-
-
-def create_partition_matrix_from_vector(partition_vec):
-    """
-    Create a partition indicator matrix from a given vector; -1 entries in partition vector will
-    be ignored and can be used to denote unasigned nodes.
-    """
-    partition_vec = partition_vec.astype(int)
-    nr_nodes = partition_vec.size
-    #~ k=len(np.unique(partition_vec))
-    k=np.max(partition_vec)+1 # changed to max value in case some groups are empty
-
-    partition_matrix = scipy.sparse.coo_matrix((np.ones(nr_nodes),(np.arange(nr_nodes), partition_vec.astype(int))),shape=(nr_nodes,k)).tocsr()
-    return partition_matrix
