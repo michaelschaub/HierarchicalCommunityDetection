@@ -1,7 +1,6 @@
 from __future__ import division
 import numpy as np
 import GHRGbuild
-import spectral_algorithms as spectral
 import spectral_algorithms_new as spectral_new
 import metrics
 from matplotlib import pyplot as plt
@@ -37,7 +36,7 @@ def complete_inf(groups_per_level=3, n_levels=3,prefix="results",version="new"):
             if version == "new":
                 inf_pvec = spectral_new.hier_spectral_partition(A, reps=20)
             else:
-                inf_pvec = spectral.hier_spectral_partition(A, reps=20)
+                raise ValueError("Not defined")
 
             #calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
@@ -94,7 +93,7 @@ def infer_k_known(symmetric=True, groups_per_level=3, n_levels=3, model='SBM', p
                 Ks = Ks[::-1]
                 inf_pvec = spectral_new.hier_spectral_partition(A, Ks=Ks, model=model)
             else:
-                inf_pvec = spectral.hier_spectral_partition(A, Ks=Ks, model=model)
+                raise ValueError("Not defined")
 
             # calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
@@ -147,7 +146,7 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
             if version == "new":
                 inf_pvec = spectral_new.hier_spectral_partition_agglomerate(A,true_pvec[-1])
             else:
-                inf_pvec = spectral.hier_spectral_partition_agglomerate(A,true_pvec[-1])
+                raise ValueError("Not defined")
 
             #calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
@@ -172,8 +171,6 @@ def infer_agglomeration(symmetric=True, groups_per_level=3, n_levels=3,prefix="r
                 file.write('\n')
 
 def plot_levels(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"):
-    # ~ groups_per_level=3
-    # ~ n_levels=3
     with open('results_asym/{}_knownK_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level)) as file:
         results = file.readlines()
 
@@ -211,8 +208,6 @@ def plot_levels(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"
 
 
 def plot_complete(groups_per_level=3, n_levels=3,prefix="results",mode='full'):
-    #~ groups_per_level=3
-    #~ n_levels=3
     if mode == "full":
         with open('results_asym/{}_complete_inf_{}_{}.txt'.format(prefix, n_levels, groups_per_level)) as file:
             results = file.readlines()

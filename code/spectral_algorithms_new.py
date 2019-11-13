@@ -36,39 +36,6 @@ from helperfunctions import *
 # PART 1 -- construct spectral operators
 ########################################
 
-def construct_normalised_Laplacian(Omega, reg):
-    """
-    Construct a normalized regularized Laplacian matrix (normalized adjaceny)
-    Input:
-        Omega -- Matrix / Array of network
-        reg  -- if reg is of type bool (true / false) then it acts as a switch for
-                regularization according to average degree;
-                otherwise acts as a numerical value for the regularizer
-
-    are used or a float in which case the numerical values is used as a regularizer
-    """
-    if isinstance(reg, bool):
-        if reg:
-            # set tau to average degree
-            tau = Omega.sum() / Omega.shape[0]
-        else:
-            tau = 0
-    else:
-        tau = reg
-
-    degree = np.array(Omega.sum(1)).flatten().astype(float) + tau
-
-    # construct normalised Laplacian either as sparse matrix or dense array depending on input
-    if scipy.sparse.issparse(Omega):
-        Dtau_sqrt_inv = scipy.sparse.diags(np.power(degree, -.5), 0)
-        L = Dtau_sqrt_inv.dot(Omega).dot(Dtau_sqrt_inv)
-    else:
-        Dtau_sqrt_inv = scipy.diagflat(np.power(degree, -.5), 0)
-        L = Dtau_sqrt_inv.dot(Omega).dot(Dtau_sqrt_inv)
-
-    return L, Dtau_sqrt_inv, tau
-
-
 def construct_graph_Laplacian(Omega):
     """
     Construct a Laplacian matrix from the input matrix Omega. Output can be a sparse
@@ -84,7 +51,6 @@ def construct_graph_Laplacian(Omega):
 
     return L
 
-
 def build_BetheHessian(A, r):
     """
     Construct Standard Bethe Hessian as discussed, e.g., in Saade et al
@@ -99,87 +65,6 @@ def build_BetheHessian(A, r):
 ############################################
 # PART 2 -- single pass spectral clustering
 ############################################
-
-def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
-    """ Perform one round of spectral clustering for a given network matrix A
-    Inputs: A -- input adjacency matrix
-            spectral_oper -- variant of spectral clustering to use (Laplacian, Bethe Hessian,
-            Non-Backtracking, XLaplacian, ...)
-            num_groups -- in how many groups do we want to split the graph?
-            (default: 2; set to -1 to infer number of groups from spectrum)
-
-            Output: partition_vec -- clustering of the nodes
-    """
-
-    if spectral_oper == "Lap":
-        if num_groups != -1:
-            partition, _ = regularized_laplacian_spectral_clustering(A, num_groups=num_groups)
-
-    elif spectral_oper == "Bethe":
-        partition = cluster_with_BetheHessian(A, num_groups=num_groups, regularizer=regularizer)
-
-    else:
-        raise ValueError("mode '%s' not recognised - available modes are 'Lap', Bethe'" % spectral_oper)
-
-    partition = relabel_partition_vec(partition)
-    return partition
-
-
-def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1, clustermode='kmeans', n_init=10):
-    """
-    Performs regularized spectral clustering based on Qin-Rohe 2013 using a normalized and
-    regularized adjacency matrix (called Laplacian by Rohe et al)
-    """
-
-    A = test_sparse_and_transform(A)
-
-    # check if tau regularisation parameter is specified otherwise go for mean degree...
-    if tau == -1:
-        # set tau to average degree
-        tau = A.sum() / A.shape[0]
-
-    laplacian, _, tau = construct_normalised_Laplacian(A, tau)
-
-    # compute eigenvalues and eigenvectors (sorted according to magnitude first)
-    ev, evecs = scipy.sparse.linalg.eigsh(laplacian, num_groups, which='LM', tol=1e-6)
-    # plt.figure()
-    # plt.plot(ev)
-    # ev1, evecs2 = randomized_svd(laplacian, num_groups)
-    # plt.figure()
-    # plt.plot(ev1-ev)
-
-    if clustermode == 'kmeans':
-        X = preprocessing.normalize(evecs, axis=1, norm='l2')
-
-        clust = KMeans(n_clusters=num_groups, n_init=n_init)
-        clust.fit(X)
-        partition_vector = clust.labels_
-
-    elif clustermode == 'qr':
-        partition_vector = clusterEVwithQR(evecs)
-
-    elif clustermode == 'GMM':
-        X = preprocessing.normalize(evecs, axis=1, norm='l2')
-        GMM = mixture.GaussianMixture(n_components=num_groups, covariance_type='full', n_init=n_init)
-        GMM.fit(X)
-        partition_vector = GMM.predict(X)
-
-    elif clustermode == 'GMMdiag':
-        X = preprocessing.normalize(evecs, axis=1, norm='l2')
-        GMM = mixture.GaussianMixture(n_components=num_groups, covariance_type='diag', n_init=n_init)
-        GMM.fit(X)
-        partition_vector = GMM.predict(X)
-
-    elif clustermode == 'GMMsphere':
-        X = preprocessing.normalize(evecs, axis=1, norm='l2')
-        GMM = mixture.GaussianMixture(n_components=num_groups, covariance_type='sphere', n_init=n_init)
-        GMM.fit(X)
-        partition_vector = GMM.predict(X)
-
-    partition_vector = relabel_partition_vec(partition_vector)
-
-    return partition_vector, evecs
-
 
 def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', clustermode='kmeans'):
     """
@@ -243,32 +128,19 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', clustermode='
     else:
         print "Something went wrong -- provide valid clustermode"
 
+    partition_vector = relabel_partition_vec(partition_vector)
     return partition_vector
-
-
-def clusterEVwithQR(EV, randomized=False, gamma=4):
-    """Given a set of eigenvectors find the clusters of the SBM"""
-    if randomized is True:
-        Z, Q = orthogonalizeQR_randomized(EV, gamma)
-    else:
-        Z, Q = orthogonalizeQR(EV)
-
-    cluster_ = scipy.absolute(Z).argmax(axis=1).astype(int)
-
-    return cluster_
 
 
 ##############################################################
 # PART 3 -- Hierarchical spectral clustering and agglomeration
 ##############################################################
 
-def hier_spectral_partition(A, spectral_oper='Bethe', first_pass='Bethe', model='SBM', reps=10, noise=2e-2, Ks=None):
+def hier_spectral_partition(A, model='SBM', reps=10, noise=2e-2, Ks=None):
     """
     Performs a full round of hierarchical spectral clustering.
     Inputs:
         A -- sparse {0,1} adjacency matrix of network
-        first_pass -- spectral operator for model selection
-        spectral_oper -- spectral operator for initial clustering
         model -- parameter for spectral clustering
         reps -- repetitions / number of samples drawn in bootstrap error test
         noise -- corresponding noise parameter for bootstrap
@@ -285,17 +157,13 @@ def hier_spectral_partition(A, spectral_oper='Bethe', first_pass='Bethe', model=
 
     # FIRST STEP -- estimate number of partitions
     # If Ks is not specified then estimate the number of clusters using the Bethe Hessian
-    # SECOND STEP
-    # initial spectral clustering using spectral_oper; Lap == Rohe Laplacian
+    # otherwise use Bethe Hessian to cluster with specified number of groups
     if Ks is None:
-        p0 = spectral_partition(A, spectral_oper=first_pass, num_groups=-1)
+        p0 = cluster_with_BetheHessian(A, num_groups=-1, regularizer="BHa")
         Ks = []
         Ks.append(np.max(p0) + 1)
-    if spectral_oper != first_pass:
-        p0 = spectral_partition(A, spectral_oper=spectral_oper, num_groups=Ks[-1])
-    # TODO: atm just uses the Bethe Hessian to figure out the number of communities but
-    # then uses Rohe Laplacian to do the first inference step -- we can simplify to just
-    # use Bethe Hessian
+    else:
+        p0 = cluster_with_BetheHessian(A, num_groups=Ks[-1], regularizer="BHa")
 
     # if Ks only specifies number of clusters at finest level,
     # set again to none for agglomeration
@@ -304,7 +172,7 @@ def hier_spectral_partition(A, spectral_oper='Bethe', first_pass='Bethe', model=
     else:
         Ks = Ks[:-1]
 
-    # THIRD STEP
+    # SECOND STEP
     # Now we build a list of all partitions
     pvec_agg = hier_spectral_partition_agglomerate(A, p0, model=model, reps=reps, noise=noise, Ks=Ks)
 
@@ -322,7 +190,6 @@ def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, nois
         noise -- corresponding noise parameter for bootstrap
         Ks -- list of the partition sizes at each level 
               (e.g. [3 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
-        spectral_oper -- spectral operator used to perform clustering not used atm
         model -- parameter for spectral clustering
 
     Outputs:
@@ -457,9 +324,7 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
         partition_vec -- found partition at this level
     """
 
-    # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
     L = construct_graph_Laplacian(A)
-    Dtau_sqrt_inv = 0
 
     # get eigenvectors
     # input A may be a sparse scipy matrix or dense format numpy 2d array.
@@ -472,7 +337,7 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
     evecs = evecs[:, index]
 
     # find the partition for Ks[-1] groups
-    partition_vec, Hnorm = find_partition(evecs, Ks[-1], model, Dtau_sqrt_inv)
+    partition_vec, _ = find_partition(evecs, Ks[-1], model)
 
     return Ks[:-1], [partition_vec]
 
@@ -499,8 +364,6 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
 
     # first identify partitions and their projection error
     Ks, _, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
-    # plt.figure(125)
-    # plt.plot(Ks, sum_errors2, 'o')
 
     # repeat with noise
     if reps > 0:
@@ -533,7 +396,6 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', p
     max_k = np.max(Ks)
 
     L = construct_graph_Laplacian(A)
-    Dtau_sqrt_inv = 0
 
     # get eigenvectors
     # input A may be a sparse scipy matrix or dense format numpy 2d array.
@@ -553,7 +415,7 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', p
     # find partitions and their error for each k
     for ki, k in enumerate(Ks):
         if partitions_unknown:
-            partition_vec, Hnorm = find_partition(evecs, k, model, Dtau_sqrt_inv)
+            partition_vec, Hnorm = find_partition(evecs, k, model)
         else:
             partition_vec = partition_vecs[ki]
             Hnorm = create_normed_partition_matrix_from_vector(partition_vec, model)
@@ -565,8 +427,6 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', p
         if partitions_unknown:
             partition_vecs.append(partition_vec)
 
-    # plt.figure(111)
-    # plt.plot(error)
     return Ks, error, partition_vecs
 
 def expected_errors_random_projection(dim_n,levels):
@@ -659,7 +519,19 @@ def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglom
 
     return np.array(levels), below_thresh
 
-def find_partition(evecs, k, model, Dtau_sqrt_inv, method='GMMspherical', n_init=20):
+
+def clusterEVwithQR(EV, randomized=False, gamma=4):
+    """Given a set of eigenvectors find the clusters of the SBM"""
+    if randomized is True:
+        Z, Q = orthogonalizeQR_randomized(EV, gamma)
+    else:
+        Z, Q = orthogonalizeQR(EV)
+
+    cluster_ = scipy.absolute(Z).argmax(axis=1).astype(int)
+
+    return cluster_
+
+def find_partition(evecs, k, model, method='KM', n_init=20):
     """ 
     Perform clustering in spectral embedding space according to various criteria
     """
@@ -668,8 +540,6 @@ def find_partition(evecs, k, model, Dtau_sqrt_inv, method='GMMspherical', n_init
     if model == 'DCSBM':
         X = preprocessing.normalize(V, axis=1, norm='l2')
     elif model == 'SBM':
-        # X = Dtau_sqrt_inv* V
-        # X = V
         X = preprocessing.normalize(V, axis=1, norm='l2')
     else:
         print('something went wrong. Please specify valid mode')
