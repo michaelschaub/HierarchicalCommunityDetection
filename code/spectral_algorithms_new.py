@@ -19,6 +19,7 @@ import scipy.sparse
 import scipy.sparse.linalg as linalg
 from scipy.sparse.linalg import LinearOperator
 from scipy.signal import argrelextrema
+from scipy.signal import argrelmin
 import scipy.linalg
 import scipy.stats
 
@@ -26,6 +27,7 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
 from sklearn import preprocessing
 from sklearn import mixture
+from sklearn.utils.extmath import randomized_svd
 
 #TODO: we probably want to have a more clean import.
 from helperfunctions import *
@@ -94,34 +96,6 @@ def build_BetheHessian(A, r):
     B = scipy.sparse.eye(A.shape[0]).dot(r**2 -1) -r*A +  scipy.sparse.diags(d,0)
     return B
 
-
-def build_weighted_BetheHessian(A,r):
-    """
-    Construct weigthed Bethe Hessian as discussed in Saade et al.
-    """
-    if not scipy.sparse.issparse(A):
-        print "Input matrix not in sparse format, transforming to sparse matrix"
-        A = scipy.sparse.csr_matrix(A)
-
-    # we are interested in A^.2 (elementwise)
-    A2data = A.data **2
-
-    new_data = A2data / (r*r -A2data)
-    A2 = scipy.sparse.csr_matrix((new_data,A.nonzero()),shape=A.shape)
-
-    # diagonal matrix
-    d = 1 + A2.sum(axis=1)
-    d = d.getA().flatten()
-    DD = scipy.sparse.diags(d,0)
-
-    # second matrix
-    rA_data = r*A.data / (r*r - A2data)
-    rA = scipy.sparse.csr_matrix((rA_data,A.nonzero()),shape=A.shape)
-
-    # full Bethe Hessian
-    BHw = DD - rA
-    return BHw
-
 ############################################
 # PART 2 -- single pass spectral clustering
 ############################################
@@ -129,7 +103,7 @@ def build_weighted_BetheHessian(A,r):
 def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
     """ Perform one round of spectral clustering for a given network matrix A
     Inputs: A -- input adjacency matrix
-            mode -- variant of spectral clustering to use (Laplacian, Bethe Hessian,
+            spectral_oper -- variant of spectral clustering to use (Laplacian, Bethe Hessian,
             Non-Backtracking, XLaplacian, ...)
             num_groups -- in how many groups do we want to split the graph?
             (default: 2; set to -1 to infer number of groups from spectrum)
@@ -142,7 +116,7 @@ def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
             partition, _ = regularized_laplacian_spectral_clustering(A, num_groups=num_groups)
 
     elif spectral_oper == "Bethe":
-        partition = cluster_with_BetheHessian(A, num_groups=num_groups, mode='unweighted', regularizer=regularizer)
+        partition = cluster_with_BetheHessian(A, num_groups=num_groups, regularizer=regularizer)
 
     else:
         raise ValueError("mode '%s' not recognised - available modes are 'Lap', Bethe'" % spectral_oper)
@@ -151,7 +125,7 @@ def spectral_partition(A, spectral_oper='Lap', num_groups=2, regularizer='BHa'):
     return partition
 
 
-def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1, clustermode='GMM', n_init=10):
+def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1, clustermode='kmeans', n_init=10):
     """
     Performs regularized spectral clustering based on Qin-Rohe 2013 using a normalized and
     regularized adjacency matrix (called Laplacian by Rohe et al)
@@ -168,6 +142,11 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1, clustermo
 
     # compute eigenvalues and eigenvectors (sorted according to magnitude first)
     ev, evecs = scipy.sparse.linalg.eigsh(laplacian, num_groups, which='LM', tol=1e-6)
+    # plt.figure()
+    # plt.plot(ev)
+    # ev1, evecs2 = randomized_svd(laplacian, num_groups)
+    # plt.figure()
+    # plt.plot(ev1-ev)
 
     if clustermode == 'kmeans':
         X = preprocessing.normalize(evecs, axis=1, norm='l2')
@@ -202,7 +181,7 @@ def regularized_laplacian_spectral_clustering(A, num_groups=2, tau=-1, clustermo
     return partition_vector, evecs
 
 
-def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighted', clustermode='kmeans'):
+def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', clustermode='kmeans'):
     """
     Perform one round of spectral clustering using the Bethe Hessian
     """
@@ -223,15 +202,8 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa', mode='weighte
         return partition_vector
 
     # construct both the positive and the negative variant of the BH
-    if mode == 'unweighted':
-        BH_pos = build_BetheHessian(A, r)
-        BH_neg = build_BetheHessian(A, -r)
-    elif mode == 'weighted':
-        BH_pos = build_weighted_BetheHessian(A, r)
-        BH_neg = build_weighted_BetheHessian(A, -r)
-    else:
-        print "Something went wrong"
-        return -1
+    BH_pos = build_BetheHessian(A, r)
+    BH_neg = build_BetheHessian(A, -r)
 
     if num_groups == -1:
         relevant_ev, lambda1 = find_negative_eigenvectors(BH_pos)
@@ -290,18 +262,18 @@ def clusterEVwithQR(EV, randomized=False, gamma=4):
 # PART 3 -- Hierarchical spectral clustering and agglomeration
 ##############################################################
 
-def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='SBM', reps=10, noise=1e-2, Ks=None):
+def hier_spectral_partition(A, spectral_oper='Bethe', first_pass='Bethe', model='SBM', reps=10, noise=2e-2, Ks=None):
     """
     Performs a full round of hierarchical spectral clustering.
     Inputs:
         A -- sparse {0,1} adjacency matrix of network
-        first_pass -- spectral operator for the first pass partitioning
-        spectral_oper -- spectral operator for remaining passes over data
+        first_pass -- spectral operator for model selection
+        spectral_oper -- spectral operator for initial clustering
         model -- parameter for spectral clustering
         reps -- repetitions / number of samples drawn in bootstrap error test
         noise -- corresponding noise parameter for bootstrap
-        Ks -- list of the partition sizes at each level in inverse order
-              (e.g. [27, 9, 3] for a hierarchical split into 3 x 3 x 3 groups.
+        Ks -- list of the partition sizes at each level 
+              (e.g. [3, 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
 
     Output: list of hier. partitions
 
@@ -313,35 +285,33 @@ def hier_spectral_partition(A, spectral_oper='Lap', first_pass='Bethe', model='S
 
     # FIRST STEP -- estimate number of partitions
     # If Ks is not specified then estimate the number of clusters using the Bethe Hessian
-    # TODO: atm just uses the Bethe Hessian to figure out the number of communities but
-    # then uses Rohe Laplacian to do the first inference step -- we can simplify to just
-    # use Bethe Hessian
+    # SECOND STEP
+    # initial spectral clustering using spectral_oper; Lap == Rohe Laplacian
     if Ks is None:
         p0 = spectral_partition(A, spectral_oper=first_pass, num_groups=-1)
         Ks = []
         Ks.append(np.max(p0) + 1)
-
-    # SECOND STEP
-    # initial spectral clustering using spectral_oper; Lap == Rohe Laplacian
-    p0 = spectral_partition(A, spectral_oper=spectral_oper, num_groups=Ks[0])
+    if spectral_oper != first_pass:
+        p0 = spectral_partition(A, spectral_oper=spectral_oper, num_groups=Ks[-1])
+    # TODO: atm just uses the Bethe Hessian to figure out the number of communities but
+    # then uses Rohe Laplacian to do the first inference step -- we can simplify to just
+    # use Bethe Hessian
 
     # if Ks only specifies number of clusters at finest level,
     # set again to none for agglomeration
     if len(Ks) == 1:
         Ks = None
     else:
-        Ks = Ks[1:]
+        Ks = Ks[:-1]
 
     # THIRD STEP
     # Now we build a list of all partitions
-    pvec_agg = hier_spectral_partition_agglomerate(
-        A, p0, spectral_oper=spectral_oper, model=model, reps=reps, noise=noise, Ks=Ks)
+    pvec_agg = hier_spectral_partition_agglomerate(A, p0, model=model, reps=reps, noise=noise, Ks=Ks)
 
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap",
-                                        model='SBM', reps=10, noise=1e-2, Ks=None, no_Ks_forward=True):
+def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=False):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -350,8 +320,8 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap",
         partition -- initial partition
         reps -- repetitions / number of samples drawn in bootstrap error test
         noise -- corresponding noise parameter for bootstrap
-        Ks -- list of the partition sizes at each level in inverse order
-              (e.g. [27, 9, 3] for a hierarchical split into 3 x 3 x 3 groups.
+        Ks -- list of the partition sizes at each level 
+              (e.g. [3 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
         spectral_oper -- spectral operator used to perform clustering not used atm
         model -- parameter for spectral clustering
 
@@ -363,81 +333,105 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap",
     1) If the list of Ks to consider is empty, we will consider all possible Ks and need
     to find the right subsplits/ levels, otherwise we only need to check partitions for
     the number of groups provided
-    2) While the list of of Ks is not empty, agglomerate network and try to identify
-    partitions either using the identify_next_level function
+    2) While the list of of Ks is not empty, agglomerate network and try to identify partitions either using the identify_next_level function
     (unknown Ks, full list), or the identify_partitions_at_level function
     (known Ks, list of group sizes)
     3) these functions return a new Ks list, and a new partition to operate with
     according to which we agglomerate the network and start again from 1)
     """
-    # TODO: the following options are not really made use of
-    # spectral_oper -- spectral operator used to perform clustering not used atm
+    # TODO: the following options are not really made use / unclear effect
     # model -- parameter for spectral clustering
 
-    # k == index of highest groups / number of groups = k+1
-    k = np.max(partition)
-    print "HIER SPECTRAL PARTITION -- agglomerative\n"
-    print "Initial partition into", k + 1, "groups \n"
+    # k ==  number of groups == max index of partition +1
+    k = np.max(partition)+1
+    print "\n\nHIER SPECTRAL PARTITION -- agglomerative\n"
+    print "Initial partition into", k, "groups \n"
 
     # Ks stores the candidate levels in inverse order
     # Note: set to min 1 group, as no agglomeration required
     # when only 2 groups are detected.
     if Ks is None:
-        Ks = np.arange(k, 1, -1)
+        Ks = np.arange(1, k+1)
         find_levels = True
     else:
         find_levels = False
 
+
     # levels is a list of 'k' values of each level in the inferred hierarchy
     # pvec stores all hier. refined partitions
-    levels = [k + 1]
+    levels = [k]
     pvec = []
     pvec.append(partition)
+    list_candidate_agglomeration = Ks
+
+    if len(Ks) <= 1:
+        return expand_partitions_to_full_graph(pvec)[::-1]
+
     while len(Ks) > 0:
 
         print "List of partitions to assess: ", Ks, "\n"
         print "Current shape of network: ", A.shape, "\n"
+        print "Current levels: ", levels, "\n"
 
-        # Question: should we normalize by varaiance of Bernoullis as well?
+        # TODO The normalization seems important for good results -- why?
+        # should we normalize by varaiance of Bernoullis as well?
         Eagg, Nagg = compute_number_links_between_groups(A, partition)
         Aagg = Eagg / Nagg
+        # print "OMEGA estimate"
+        # plt.figure()
+        # plt.imshow(Aagg-np.diag(np.diag(Aagg)))
 
         if find_levels:
-            Ks, hier_partition_vecs = identify_next_level(
-                Aagg, Ks, model=model, reg=False, norm='F', threshold=1 / 3, reps=reps, noise=noise)
+            errors, std_errors, hier_partition_vecs = identify_next_level(
+                Aagg, Ks, model=model, reg=False, norm='Fnew', reps=reps, noise=noise)
+
+            # plt.figure(125)
+            # plt.errorbar(Ks, errors,std_errors)
+
+            selected, below_thresh = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
+            selected = selected -1
+            print "selected (before), ", selected
+            selected = selected[:-1]
+            print "Ks: ", Ks, " selected: ", selected
+            Ks = Ks[selected]
+            print "Minima at", Ks
+            hier_partition_vecs = [hier_partition_vecs[si] for si in selected]
         else:
-            k = Ks[0] - 1
+            k = Ks[-1] 
             Ks, hier_partition_vecs = identify_partitions_at_level(
-                Aagg, Ks, model=model, reg=False, norm='F')
+                Aagg, Ks, model=model, reg=False)
 
         try:
-            pvec.append(hier_partition_vecs[0])
+            pvec.append(hier_partition_vecs[-1])
             partition = expand_partitions_to_full_graph(pvec)[-1]
 
             if find_levels:
-                if no_Ks_forward:
-                    k = Ks[0] - 1
-                    Ks = np.arange(k, 1, -1)
+                if ind_levels_across_agg:
+                    k = np.max(Ks)
+                    Ks = np.arange(1, k+1)
+                    list_candidate_agglomeration = Ks
                 else:
-                    # It might be useful to pass down candidates
-                    # from previous agglomeration rounds here instead of starting from scratch?!
-                    # TODO implement this!?
-                    pass
-            levels.append(k + 1)
+                # TODO: it might be useful to pass down candidates
+                # from previous agglomeration rounds here instead of starting from scratch!
+                    list_candidate_agglomeration = below_thresh + 1
+                    print "updated list"
+                    print list_candidate_agglomeration
+                    k = np.max(Ks)
+                    Ks = np.arange(1, k+1)
+
+            levels.append(k)
             # if levels are not prespecified, reset candidates
-            print 'partition into', k + 1, ' groups'
+            print 'partition into', k , ' groups'
             if k == 1:
                 Ks = []
 
-        # this exception occurs when there is only a single candidate partition
-        # and the error is not high enough
-        # Note: is this not better described as: if there is *no candidate* partition
-        # (why only single candidate? why error not high enough -- low?!)
+        # this exception occurs *no candidate* partition (selected == [])
+        # and indicates that agglomeration has stopped
         except IndexError:
+            print "selectecd == [] ", selected
             pass
 
     print "HIER SPECTRAL PARTITION -- agglomerative\n Partitions into", levels, "groups \n"
-
     return expand_partitions_to_full_graph(pvec)[::-1]
 
 # -------------------------------------------------
@@ -445,7 +439,7 @@ def hier_spectral_partition_agglomerate(A, partition, spectral_oper="Lap",
 # -------------------------------------------------
 
 
-def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
+def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
     """
     For a given graph with (weighted) adjacency matrix A and list of
     partition sizes to assess (Ks), find the partition of a given size Ks[0]
@@ -453,17 +447,15 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
     provided.
     Inputs:
         A -- (agglomerated) adjacency matrix of network
-        Ks -- list of the partition sizes at each level in inverse order
-              (e.g. [27, 9, 3] for a hierarchical split into 3 x 3 x 3 groups.
+        Ks -- list of the partition sizes at each level 
+              (e.g. [3, 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
         model -- parameter for spectral clustering
         reg -- use regularization for spectral clustering?
-        norm -- unclear
 
     Outputs:
         Ks -- remaining list of group sizes to consider
         partition_vec -- found partition at this level
     """
-    #TODO: norm should not be passed on as parameter here, since we do not assess error.
 
     # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
     L = construct_graph_Laplacian(A)
@@ -474,31 +466,28 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False, norm='F'):
     try:
         ev, evecs = scipy.linalg.eigh(L)
     except ValueError:
-        # ev, evecs = scipy.sparse.linalg.eigsh(L,Ks[0],which='LM',tol=1e-6)
-        ev, evecs = scipy.sparse.linalg.eigsh(L, Ks[0], which='SM', tol=1e-6)
+        ev, evecs = scipy.sparse.linalg.eigsh(L, Ks[-1], which='SM', tol=1e-6)
 
     index = np.argsort(np.abs(ev))
-    # evecs = evecs[:,index[::-1]]
     evecs = evecs[:, index]
 
-    # find the partition for Ks[0] groups
-    partition_vec, Hnorm = find_partition(evecs, Ks[0], model, Dtau_sqrt_inv)
+    # find the partition for Ks[-1] groups
+    partition_vec, Hnorm = find_partition(evecs, Ks[-1], model, Dtau_sqrt_inv)
 
-    return Ks[1:], [partition_vec]
+    return Ks[:-1], [partition_vec]
 
 
-def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', threshold=1 / 3, reps=10, noise=1e-2):
+def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=1e-2):    
     """
     Identify agglomeration levels by checking the projection errors and comparing the to a
     perturbed verstion of the same network
     Inputs:
         A -- (agglomerated) adjacency matrix of network
-        Ks -- list of the partition sizes at each level in inverse order
-              (e.g. [27, 9, 3] for a hierarchical split into 3 x 3 x 3 groups.
+        Ks -- list of the partition sizes at each level 
+              (e.g. [3 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
         model -- parameter for spectral clustering
         reg -- use regularization for spectral clustering?
         norm -- norm used to assess projection error
-        threshold -- threshold parameter to assess projection error
         reps -- number of repetitions for bootstrap
         noise -- noise parameter for bootstrap
 
@@ -509,65 +498,42 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='F', threshold=1 / 3
     """
 
     # first identify partitions and their projection error
-    Ks, sum_errors, partition_vecs = identify_partitions_and_errors(
-        A, Ks, model, reg, norm, partition_vecs=[])
+    Ks, _, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    # plt.figure(125)
+    # plt.plot(Ks, sum_errors2, 'o')
 
     # repeat with noise
     if reps > 0:
+
         sum_errors = 0.
         std_errors = 0.
         m = 0.
 
-        for rep in xrange(reps):
+        for kk in xrange(reps):
             Anew = add_noise_to_small_matrix(A, snr=noise)
-            _, errors, _ = identify_partitions_and_errors(
-                Anew, Ks, model, reg, norm, partition_vecs)
+            _, errors, _ = identify_partitions_and_errors(Anew, Ks, model, reg, norm, partition_vecs)
             sum_errors += errors
 
             # calculate online variance
             m_prev = m
-            m = m + (errors - m) / (rep + 1)
+            m = m + (errors - m) / (kk + 1)
             std_errors = std_errors + (errors - m) * (errors - m_prev)
 
         sum_errors /= reps
         std_errors = np.sqrt(std_errors/(reps-1))
-    # find errors below threshold
-    below_thresh = (sum_errors < threshold)
 
-    # TODO: replace all of the below and the find minima function by using find peaks function!?
-    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.find_peaks.html#scipy.signal.find_peaks
-    levels = find_local_minima(sum_errors)
-    # print below_thresh.nonzero()[0]
-    # print 'sum_errors', zip(Ks[levels], sum_errors[levels])
-    # print 'sum_errors', zip(Ks[below_thresh], sum_errors[below_thresh])
-    # choose only local minima that are below threshold
-    levels = np.intersect1d(levels, below_thresh.nonzero()[0])
-    print 'Levels inferred=', len(levels), Ks[levels], sum_errors[levels], std_errors[levels]
-    hier_partition_vecs = [partition_vecs[si] for si in levels]
-    return Ks[levels], hier_partition_vecs
+    return sum_errors, std_errors, partition_vecs
 
 
-def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', partition_vecs=[]):
+def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', partition_vecs=[]):
     """
-    Collect the partitions and projection errors found for a list Ks of
-    'putative' group numbers
-
-    Inputs:
-        A -- (agglomerated) adjacency matrix of network
-        Ks -- list of the partition sizes at each level in inverse order
-              (e.g. [27, 9, 3] for a hierarchical split into 3 x 3 x 3 groups.
-        model -- parameter for spectral clustering
-        reg -- use regularization for spectral clustering?
-        norm -- norm used to assess projection error
-        partition_vecs -- list of partitions from previous clustering, whos error w.r.t.
-        the eigenvectors of the new network we would like to assess.
+    Collect the partitions and projection errors found for a list Ks of 'putative' group numbers
     """
 
-    max_k = Ks[0]
+    max_k = np.max(Ks)
 
-    # L, Dtau_sqrt_inv, tau = construct_normalised_Laplacian(A, reg)
     L = construct_graph_Laplacian(A)
-    Dtau_sqrt_inv = L
+    Dtau_sqrt_inv = 0
 
     # get eigenvectors
     # input A may be a sparse scipy matrix or dense format numpy 2d array.
@@ -575,10 +541,8 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
         ev, evecs = scipy.linalg.eigh(L)
     except ValueError:
         print L.shape, max_k
-        # ev, evecs = scipy.sparse.linalg.eigsh(L,max_k,which='LM',tol=1e-6)
         ev, evecs = scipy.sparse.linalg.eigsh(L, max_k, which='SM', tol=1e-6)
     index = np.argsort(np.abs(ev))
-    # evecs = evecs[:,index[::-1]]
     evecs = evecs[:, index]
 
     # initialise errors
@@ -596,33 +560,126 @@ def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='F', part
 
         # calculate and store error
         error[ki] = calculate_proj_error(evecs, Hnorm, norm)
-        # print("K, error ")
-        # print(k, error[ki])
 
         # save partition
         if partitions_unknown:
             partition_vecs.append(partition_vec)
 
+    # plt.figure(111)
+    # plt.plot(error)
     return Ks, error, partition_vecs
 
+def expected_errors_random_projection(dim_n,levels):
+    """
+    Compute vector of expected errors for random projection
+        dim_n -- ambient space
+        levels of hierarchy [1, ..., dim_n]
+    """
+    start_end_pairs = zip(levels[:-1],levels[1:])
+
+    expected_error = []
+    for i,j in start_end_pairs:
+        Ks = np.arange(i,j)
+        errors = (Ks - i) * (j - Ks) / dim_n
+        expected_error = np.hstack([expected_error,errors])
+    expected_error = np.hstack([expected_error,0])
+    return expected_error
+
+def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
+    #TODO: how to choose the threshold? 
+    relerror = np.zeros(expected_error.size) 
+    ratio_error = np.zeros(expected_error.size) 
+
+    # find points below relative error
+    nonzero = expected_error != 0
+    relerror[nonzero] = (errors[nonzero] + 3*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
+    threshold = -0.5
+    below_thresh = np.nonzero(relerror < threshold)[0]
+    plt.figure(12)
+    plt.plot(np.arange(1,relerror.size+1),relerror)
+    plt.plot(np.arange(1,relerror.size+1),threshold*np.ones(relerror.size))
+
+    # find relative minima
+    ratio_error[nonzero] = (errors[nonzero] + 3*std_errors[nonzero])/ expected_error[nonzero]
+    local_min = argrelmin(ratio_error)[0]
+    plt.figure(13)
+    plt.plot(np.arange(1,ratio_error.size+1),ratio_error)
+
+    # levels == below thres && local min
+    levels = np.intersect1d(local_min, below_thresh).astype(int)
+
+    # remove already found local minima from list
+    Ks = np.arange(errors.size)
+    levels = np.intersect1d(levels, Ks[nonzero]).astype(int)
+
+    Ks = np.arange(1, errors.size+1)
+    print "Ks, local_min, below_thresh, levels"
+    print Ks, Ks[local_min], Ks[below_thresh], Ks[levels]
+    best_level = -1
+    if levels.size > 0:
+        best_level = levels[np.argmin(relerror[levels])]+1
+        print "agglomeration level candidate"
+        print best_level
+
+    # plt.figure(9)
+    # plt.plot(np.arange(1,errors.size+1), relerror)
+    return best_level, below_thresh
+
+def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration):
+    """Given a set of error and standard deviations, find best minima"""
+    levels = [1,errors.size]
+    expected_error = expected_errors_random_projection(errors.size,levels)
+
+    # plot candidate levels vs. errors
+    plt.figure(222)
+    Ks = np.arange(expected_error.size) + 1
+    plt.plot(Ks,expected_error)
+    plt.errorbar(Ks,errors,std_errors)
+
+    next_level, below_thresh = find_smallest_relevant_minima_from_errors(errors,std_errors, expected_error)
+    while next_level != -1:
+        levels = levels + [next_level]
+        levels.sort()
+        expected_error = expected_errors_random_projection(errors.size, levels)
+        next_level, _ = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
+
+    print "list_candidate_agglomeration"
+    print list_candidate_agglomeration
+    print "levels"
+    print levels
+    levels = np.intersect1d(np.array(levels),list_candidate_agglomeration)
+    print "levels updated"
+    print levels
+
+    # remove again the level 1 entry
+    if levels[0] == 1:
+        levels = levels[1:]
+    print "levels returned"
+    print np.array(levels)
+
+    return np.array(levels), below_thresh
 
 def find_partition(evecs, k, model, Dtau_sqrt_inv, method='GMMspherical', n_init=20):
-    """ Perform clustering in spectral embedding space according to various criteria"""
+    """ 
+    Perform clustering in spectral embedding space according to various criteria
+    """
     V = evecs[:, :k]
 
     if model == 'DCSBM':
         X = preprocessing.normalize(V, axis=1, norm='l2')
     elif model == 'SBM':
         # X = Dtau_sqrt_inv* V
-        X = V
+        # X = V
+        X = preprocessing.normalize(V, axis=1, norm='l2')
     else:
-        error('something went wrong. Please specify valid mode')
+        print('something went wrong. Please specify valid mode')
+        return -999
 
     # select methof of clustering - QR, KM (k-means), or GMM
     if method == 'QR':
         partition_vec = clusterEVwithQR(X)
     elif method == 'KM':
-        clust = KMeans(n_clusters=k, n_init=n_init)
+        clust = KMeans(n_clusters=k, n_init=n_init,n_jobs=2)
         clust.fit(X)
         partition_vec = clust.labels_
         partition_vec = relabel_partition_vec(partition_vec)

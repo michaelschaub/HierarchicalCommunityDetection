@@ -1,0 +1,4 @@
+version hash -- 69d270b664636aa47964914799cf19205ca61eb3
+
+- Experiment to compare old and new agglomeration criteria
+- includes experiment with fixed variance estimator (one commit further)

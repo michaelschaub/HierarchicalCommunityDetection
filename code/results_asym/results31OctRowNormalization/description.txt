@@ -1,0 +1,2 @@
+commit f85614e5c50b8eb1b484bb9468c5869200698812
+run test with row-normalized eigenvectors instead of (standard) column normalization

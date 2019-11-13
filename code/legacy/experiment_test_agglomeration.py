@@ -124,32 +124,6 @@ def test_subspace_angle():
     return angle
 
 def find_subspace_angle_between_ev_bases(U,V):
-    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    # % a modified algorithm for calculating the principal angles %
-    # % between the two subspaces spanned by the columns of       %
-    # % A and B. Good for small (<10^(-6)) and large angles.   %
-    # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    # function [angles] = mPrinAngles(A,B)
-    # [Qa,Ra] = qr(A,0);
-    # [Qb,Rb] = qr(B,0);
-    # C = svd((Qa')*Qb,0);
-    # rkA = rank(Qa);
-    # rkB = rank(Qb);
-    # if rkA >= rkB
-    # B = Qb - Qa*(Qa'*Qb);
-    # else
-    # B = Qa - Qb*(Qb'*Qa);
-    # end
-    # S = svd(B,0);
-    # S = sort(S);
-    # for i = 1:min(rkA,rkB)
-    # if (C(i))^2 < 0.5
-    # angles(i) = acos(C(i));
-    # elseif (S(i))^2 <= 0.5
-    # angles(i) = asin(S(i));
-    # end
-    # end
-    # angles=angles'
     Q1 = U.T.dot(V)
     sigma = scipy.linalg.svd(Q1,compute_uv=False)
     angle = -np.ones(sigma.size)
@@ -163,7 +137,7 @@ def find_subspace_angle_between_ev_bases(U,V):
         sin_index = np.bitwise_not(cos_index)
         angle[sin_index] = np.arcsin(sigma2[sin_index])
 
-    return angle
+    return angle, sigma
 
 def clusterEVwithQR(EV, randomized=False, gamma=4):
     """Given a set of eigenvectors find the clusters of the SBM"""
@@ -269,8 +243,8 @@ def createTiagoHierNetwork():
     # TODO: perhaps we should have the EEP normalization here?!
     Eagg, Nagg = spectral.compute_number_links_between_groups(A,p0)
     Aagg = Eagg / Nagg
-    plt.figure()
-    plt.imshow(Aagg,interpolation='nearest')
+    # plt.figure()
+    # plt.imshow(Aagg,interpolation='nearest')
 
     reg= False
     # normalized Laplacian is D^-1/2 A D^-1/2
@@ -321,6 +295,7 @@ def createTiagoHierNetwork():
     plt.plot(1+np.arange(max_k),error)
     plt.figure()
     plt.plot(1+np.arange(max_k),likelihood)
+    return A
 
 def createCliqueNetwork():
     a = 1
@@ -507,10 +482,10 @@ def test_agglomeration_ideas(groups_per_level=3):
 
 def test_agglomeration_ideas_noise_pert(groups_per_level=2):
     # n=2**13
-    n=4**7
+    n=3**9
     snr=7
     c_bar=50
-    n_levels=4
+    n_levels=2
 
     max_k = groups_per_level**n_levels
     norm = 'F'
@@ -525,8 +500,10 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=2):
 
     # do a first round of clustering with the Bethe Hessian
     # p0 = spectral.cluster_with_BetheHessian(A,num_groups=groups_per_level**n_levels,mode='unweighted', regularizer='BHa',clustermode='kmeans')
-    # p0 = spectral.cluster_with_BetheHessian(A,num_groups=-1,mode='unweighted', regularizer='BHa',clustermode='kmeans')
-    p0=ptrue.astype(int)
+    p0 = spectral.cluster_with_BetheHessian(A,num_groups=-1,mode='unweighted', regularizer='BHa',clustermode='kmeans')
+    # p0=ptrue.astype(int)
+    # k0 = p0.max() + 1
+    # p0, _ = spectral.regularized_laplacian_spectral_clustering(A,num_groups=k0,clustermode='qr')
     p0 = spectral.relabel_partition_vec(p0)
     plt.figure(1)
     plt.plot(p0,'x')
@@ -534,7 +511,7 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=2):
 
     # aggregate matrix
     Eagg, Nagg = spectral.compute_number_links_between_groups(A,p0)
-    Aagg = Eagg / Nagg
+    Aagg = Eagg / np.sqrt(Nagg)
     aggregate = True
 
     while aggregate:
@@ -581,7 +558,7 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=2):
             partition_vec, Hnorm = spectral.find_partition(evecs, k+1, tau, norm, mode, Dtau_sqrt_inv)
             H = spectral.create_partition_matrix_from_vector(partition_vec)
             error[k] = calculate_proj_error(evecs, Hnorm, norm)
-            angles = find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k+1])
+            angles,_ = find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k+1])
             angle_min[k] = np.min(angles)
             angle_max[k] = np.max(angles)
             likelihood[k] = compute_likelihood_SBM(partition_vec[p0],A)
@@ -639,8 +616,8 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=2):
                 H = spectral.create_partition_matrix_from_vector(partition_vec)
                 Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
                 error_rand[pp,k-1] = calculate_proj_error(evecs, Hnorm, norm)
-                angle_min_rand[pp,k-1] = np.min(find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k]))
-                angle_max_rand[pp,k-1] = np.max(find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k]))
+                angle_min_rand[pp,k-1] = np.min(find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k])[0])
+                angle_max_rand[pp,k-1] = np.max(find_subspace_angle_between_ev_bases(Hnorm,evecs[:,:k])[0])
                 likelihood_rand[pp,k-1] = compute_likelihood_SBM(partition_vec[p0],A)
                 print("K, error / exp rand error, likelihood")
                 print(k, error_rand[pp,k-1], likelihood_rand[pp,k-1])
@@ -670,11 +647,7 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=2):
         print "Relative minima"
         print relative_minima
         filtered_candidates_local_minima = np.intersect1d(relative_minima, candidate_list)
-        if filtered_candidates_local_minima.size <=1:
-            filter_start = np.nonzero(np.diff(candidates_for_hier)==-1)[0]+1
-            filter_start = filter_start[0:1]
-        else:
-            filter_start = np.ones(1,dtype=int)
+        filter_start = 0*np.nonzero(np.diff(candidates_for_hier)==-1)[0]+1
         print "Filter start"
         print filter_start
         filtered_candidates = np.union1d(filtered_candidates_local_minima,filter_start)
@@ -702,7 +675,7 @@ def test_agglomeration_ideas_noise_pert(groups_per_level=2):
 
         if found_partition:
             Eagg, Nagg = spectral.compute_number_links_between_groups(A,p0)
-            Aagg = Eagg / Nagg
+            Aagg = Eagg / np.sqrt(Nagg)
             aggregate = True
         else:
             aggregate = False
@@ -793,4 +766,215 @@ def agglomeration_loop_SNR():
         name = "AgglomerationTest_snr" + str(snr) + ".pdf"
         plt.savefig(name)
 
+def findNumberOfCommunitiesByInvariantSubspace():
+    """Given a matrix M, find the dominant 'low-rank' components by perturbing the matrix slightly and checking, what number of eigenvectors keep spanning the same subspace"""
 
+    num_pert = 20
+    kguess = 15
+
+    a = 0.95
+    b = 0.7
+    c = 0.35
+    d = 0.2
+    Omega = np.array([[a, b, b, 0, 0, 0, d, 0, 0, 0, 0, 0],
+                      [0, a, b, 0, 0, 0, 0, d, 0, 0, 0, 0],
+                      [0, 0, a, c, 0, 0, 0, 0, d, 0, 0, 0],
+                      [0, 0, 0, a, b, b, 0, 0, 0, d, 0, 0],
+                      [0, 0, 0, 0, a, b, 0, 0, 0, 0, d, 0],
+                      [0, 0, 0, 0, 0, a, 0, 0, 0, 0, 0, d],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+    Omega = Omega + Omega.T -np.diagflat(np.diag(Omega))
+
+    # get some eigenvectors
+    nc = np.ones(12,dtype=int)*100
+    # A = 1.0*sample_networks.sample_block_model(Omega,nc)
+
+    n = 2700
+    c_bar = 30
+    n_levels = 2
+    groups_per_level = 3
+    snr = 6
+
+    D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
+    ptrue, _ = D_actual.get_partition_at_level(-1)  # true partition lowest level
+    G = D_actual.generateNetworkExactProb()
+    A = D_actual.to_scipy_sparse_matrix(G)
+    regularize = False
+    LnA, _ = spectral.construct_normalised_Laplacian(A.astype(float),regularize)
+    U, S, Vt = scipy.sparse.linalg.svds(LnA,k=kguess)
+    index = scipy.argsort(S)
+    V = Vt.T
+    V = V[:,index]
+    V = V[:,::-1]
+
+    plt.figure()
+    plt.plot(V[:,:groups_per_level**n_levels])
+
+    angle_compare = np.zeros(kguess)
+    std_compare = np.zeros(kguess)
+    for ktest in xrange(kguess):
+        sangles = np.zeros((ktest+1,num_pert))
+        for i in xrange(num_pert):
+            Apert = perturbNetworkWithSparseNoise(A)
+            LnApert, _ = spectral.construct_normalised_Laplacian(Apert.astype(float),regularize)
+            print "Norm difference"
+            print scipy.sparse.linalg.norm(LnApert-LnA)
+            U, S, Vt2 = scipy.sparse.linalg.svds(LnApert,k=ktest+1)
+            Vpert =  Vt2.T
+            index = scipy.argsort(S)
+            Vpert = Vpert[:,index]
+            Vpert = Vpert[:,::-1]
+            sangles[:,i], _ = find_subspace_angle_between_ev_bases(V[:,0:ktest+1],Vpert)
+        plt.figure()
+        plt.plot(Vpert,V[:,:ktest+1],'x')
+
+        print sangles.mean(axis=1)
+        print sangles.std(axis=1)
+        std_compare[ktest] = sangles.max(axis=1).std()
+        angle_compare[ktest] = sangles.max(axis=1).mean()
+
+    plt.figure()
+    plt.plot(angle_compare,'x')
+    plt.figure()
+    plt.plot(std_compare,'x')
+
+def findNumberOfCommunitiesByInvariantSubspace2():
+    """Given a matrix M, find the dominant 'low-rank' components by perturbing the matrix slightly and checking, what number of eigenvectors keep spanning the same subspace"""
+
+    num_pert = 10
+    kguess = 35
+
+    n = 3**9
+    c_bar = 50
+    n_levels = 3
+    groups_per_level = 3
+    snr = 5
+
+    D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
+    ptrue, _ = D_actual.get_partition_at_level(-1)  # true partition lowest level
+    G = D_actual.generateNetworkExactProb()
+    A = D_actual.to_scipy_sparse_matrix(G)
+
+    regularize = True
+    LnA, _ = spectral.construct_normalised_Laplacian(A.astype(float),regularize)
+    U, S, Vt = scipy.sparse.linalg.svds(LnA,k=kguess)
+    index = scipy.argsort(S)
+    V = Vt.T
+    V = V[:,index]
+    V = V[:,::-1]
+
+    rho = A.mean()
+    ERgraph = ER(A.shape[0],rho)
+    U, S, Vt = scipy.sparse.linalg.svds(LnA,k=kguess)
+    index = scipy.argsort(S)
+    VEr = Vt.T
+    VEr = VEr[:,index]
+    VEr = VEr[:,::-1]
+
+    angle_compare = np.zeros((kguess,num_pert))
+    sigmas_compare = np.zeros((kguess,num_pert))
+    angle_compareER = np.zeros((kguess,num_pert))
+    sigmas_compareER = np.zeros((kguess,num_pert))
+    for i in xrange(num_pert):
+        Apert = perturbNetworkWithSparseNoise(A)
+        LnApert, _ = spectral.construct_normalised_Laplacian(Apert.astype(float),regularize)
+        print "Norm difference"
+        print scipy.sparse.linalg.norm(LnApert-LnA)
+        U, S, Vt2 = scipy.sparse.linalg.svds(LnApert,k=kguess)
+        Vpert =  Vt2.T
+        index = scipy.argsort(S)
+        Vpert = Vpert[:,index]
+        Vpert = Vpert[:,::-1]
+        angle_compare[:,i], sigmas_compare[:,i] = find_subspace_angle_between_ev_bases(V,Vpert)
+
+        #same with ER
+        Apert = perturbNetworkWithSparseNoise(ERgraph)
+        LnApert, _ = spectral.construct_normalised_Laplacian(Apert.astype(float),regularize)
+        print "Norm difference"
+        print scipy.sparse.linalg.norm(LnApert-LnA)
+        U, S, Vt2 = scipy.sparse.linalg.svds(LnApert,k=kguess)
+        VErp = Vt2.T
+        index = scipy.argsort(S)
+        VErp = VErp[:,index]
+        VErp = VErp[:,::-1]
+        angle_compareER[:,i], sigmas_compareER[:,i] = find_subspace_angle_between_ev_bases(VEr,VErp)
+
+
+    plt.figure()
+    plt.errorbar(np.arange(1,kguess+1),sigmas_compare.mean(axis=1),yerr=sigmas_compare.std(axis=1))
+    plt.plot(np.arange(1,kguess+1),sigmas_compare.min(axis=1))
+    plt.figure()
+    plt.plot(np.arange(1,kguess),np.diff(sigmas_compare.mean(axis=1)))
+    # plt.figure()
+    # plt.errorbar(np.arange(1,kguess+1),sigmas_compareER.mean(axis=1),yerr=sigmas_compareER.std(axis=1))
+
+    plt.figure()
+    plt.errorbar(np.arange(1,kguess+1),angle_compare.mean(axis=1),yerr=angle_compare.std(axis=1))
+    plt.plot(np.arange(1,kguess+1),angle_compare.min(axis=1))
+    plt.figure()
+    plt.errorbar(np.arange(1,kguess+1),angle_compareER.mean(axis=1),yerr=angle_compareER.std(axis=1))
+
+def perturbNetworkWithSparseNoise(A):
+    """ Add sparse Gaussian noise to matrix"""
+    snr = 0.2
+    rho = A.mean()
+    P = sprandsym(A.shape[0],rho)
+    normNoise = scipy.sparse.linalg.norm(P)
+    normA = scipy.sparse.linalg.norm(A)
+    print "NORMS"
+    print normNoise, normA
+    Ap = A + snr*normA/normNoise*P
+
+    return Ap
+
+
+import scipy.stats as stats
+import scipy.sparse as sparse
+def sprandsym(n, density):
+    rvs = stats.norm().rvs
+    X = sparse.random(n, n, density=density, data_rvs=rvs)
+    # X = sparse.random(n, n, density=density)
+    upper_X = sparse.triu(X)
+    result = upper_X + upper_X.T - sparse.diags(X.diagonal())
+    return result
+
+def ER(n, density):
+    X = sparse.random(n, n, density=density)
+    upper_X = sparse.triu(X)
+    result = upper_X + upper_X.T - sparse.diags(X.diagonal())
+    result = 1*(result > 0)
+    return result
+
+def aggressiveEVModelSelection():
+    n = 2700
+    c_bar = 30
+    n_levels = 2
+    groups_per_level = 3
+    snr = 5
+
+    D_actual = GHRGbuild.create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
+    ptrue, _ = D_actual.get_partition_at_level(-1)  # true partition lowest level
+    G = D_actual.generateNetworkExactProb()
+    A = D_actual.to_scipy_sparse_matrix(G)
+
+    Ln,_ = spectral.construct_normalised_Laplacian(A,True)
+
+    rho = A.mean()
+    ERgraph = ER(A.shape[0],rho)
+    LnNull,_ = spectral.construct_normalised_Laplacian(ERgraph,True)
+    print rho
+
+    Kest_pos = 50
+    if Kest_pos > A.shape[0]:
+        Kest_pos = A.shape[0]
+    ev_BH_pos, evecs_BH_pos = scipy.sparse.linalg.eigsh(Ln,Kest_pos,which='LM')
+    ev_BH_neg, evecs_BH_neg = scipy.sparse.linalg.eigsh(LnNull,Kest_pos,which='LM')
+    print ev_BH_pos
+    print ev_BH_neg
+
+    return evecs_BH_pos, evecs_BH_neg

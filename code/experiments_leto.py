@@ -82,15 +82,38 @@ def boot(groups_per_level=3,n_levels=3,snr=20):
     return partition_vec, errors
 
 
+def run_real(network='agblog-pol'):
+    with open('data/{}_edges.txt'.format(network)) as file:
+        edges = np.int32([row.strip().split() for row in file.readlines()])
+    
+    G=nx.Graph()
+    G.add_edges_from(edges)
+    A = nx.to_scipy_sparse_matrix(G)
+    pvec = spectral.hier_spectral_partition(A, reps=10)
+    
+    with open('data/{}_labels.txt'.format(network)) as file:
+        labels = np.int32([row.strip().split() for row in file.readlines()])
+    
+    print "labels", len(labels[:,1]), len(pvec[0])
+    
+    score_matrix = metrics.calculate_level_comparison_matrix(pvec, [labels[:,1]])
+    precision, recall = metrics.calculate_precision_recall(score_matrix)
+    print score_matrix
+    print "precision, recall"
+    print precision, recall
+    print "levels", [len(np.unique(pv)) for pv in pvec]
+    return pvec
+
+
 def run_model_select_exp(reps=20):
-    for snr in [20,15,10,5,3,2]:
+    for snr in [15,10,5,3,2]:
         for rep in xrange(reps):
             model_select(3,3,snr)
 
 def model_select(groups_per_level=3,n_levels=3,snr=20):
-    n=10000
+    n=3**9
     
-    c_bar=30
+    c_bar=50
     
     D_actual=GHRGbuild.create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level)
     G=D_actual.generateNetworkExactProb()
@@ -99,36 +122,45 @@ def model_select(groups_per_level=3,n_levels=3,snr=20):
     #get true hierarchy
     true_pvec = D_actual.get_partition_all()
     
-    #infer partitions with no noise
-    inf_pvec = spectral.hier_spectral_partition(A, reps=0)
-    
-    score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
-    precision, recall = metrics.calculate_precision_recall(score_matrix)
-    diff_levels = metrics.compare_levels(true_pvec,inf_pvec)
-    print len(inf_pvec), len(true_pvec)
-    print diff_levels
-    print "precision, recall"
-    print precision, recall
-    noise=0
-    
-    with open('results/model_select.txt','a') as file:
-        file.write('{} {} {:.3f} {:.3f} {} '.format(snr,noise,precision,recall,len(inf_pvec)))
-        file.write('{d[0]} {d[1]} {d[2]}\n'.format(d=diff_levels))
-    
-    for noise in [1e-3,1e-2,1e-1,.5]:
-        inf_pvec = spectral.hier_spectral_partition(A, reps=10, noise=noise)
-    
-        score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
-        precision, recall = metrics.calculate_precision_recall(score_matrix)
-        diff_levels = metrics.compare_levels(true_pvec,inf_pvec)
-        print len(inf_pvec), len(true_pvec)
-        print diff_levels
-        print "precision, recall"
-        print precision, recall
+    for ri in xrange(5):
+        for use_likelihood in [False]:
+            #infer partitions with no noise
+            inf_pvec = spectral.hier_spectral_partition(A, reps=20)
+            
+            score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
+            precision, recall = metrics.calculate_precision_recall(score_matrix)
+            diff_levels = metrics.compare_levels(true_pvec,inf_pvec)
+            print len(inf_pvec), len(true_pvec)
+            print diff_levels
+            print "precision, recall"
+            print precision, recall
+            noise=0
+            
+            print [len(np.unique(pv)) for pv in true_pvec]
+            print [len(np.unique(pv)) for pv in inf_pvec]
+            
+            print asdf
+            
+            with open('results/model_select.txt','a') as file:
+                file.write('{} {} {} {:.3f} {:.3f} {} '.format(snr,noise,int(use_likelihood),precision,recall,len(inf_pvec)))
+                file.write('{d[0]} {d[1]} {d[2]}\n'.format(d=diff_levels))
         
-        with open('results/model_select.txt','a') as file:
-            file.write('{} {} {:.3f} {:.3f} {} '.format(snr,noise,precision,recall,len(inf_pvec)))
-            file.write('{d[0]} {d[1]} {d[2]}\n'.format(d=diff_levels))
+    for noise in [1e-3,1e-2,1e-1,.5]:
+        for ri in xrange(5):
+            for use_likelihood in [True, False]:
+                inf_pvec = spectral.hier_spectral_partition(A, reps=10, noise=noise,use_likelihood=use_likelihood)
+            
+                score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
+                precision, recall = metrics.calculate_precision_recall(score_matrix)
+                diff_levels = metrics.compare_levels(true_pvec,inf_pvec)
+                print len(inf_pvec), len(true_pvec)
+                print diff_levels
+                print "precision, recall"
+                print precision, recall
+                
+                with open('results/model_select.txt','a') as file:
+                    file.write('{} {} {} {:.3f} {:.3f} {} '.format(snr,noise,int(use_likelihood),precision,recall,len(inf_pvec)))
+                    file.write('{d[0]} {d[1]} {d[2]}\n'.format(d=diff_levels))
     
     return inf_pvec
     
@@ -140,17 +172,25 @@ plot as a function of noise added, col=
 4 : number of inferred levels
 5+ : difference in number of groups at level
 """
-def plot_mse(col=2):
+def plot_mse(col=3):
     
     with open('results/model_select.txt') as file:
         data = np.float64([row.strip().split() for row in file.readlines()])
     
-    snrs = np.unique(data[:,0])
-    for snr in snrs:
-        snr_data = data[data[:,0]==snr,:]
-        noise_vals = np.unique(snr_data[:,1])
-        mean_score = [np.mean(snr_data[snr_data[:,1]==nv,col]) for nv in noise_vals]
-        plt.semilogx(noise_vals,mean_score,label=snr)
+    for uselik in [0,1]:
+    
+        snrs = np.unique(data[:,0])
+        for snr in snrs:
+            snr_data = data[data[:,0]==snr,:]
+            snr_data = snr_data[snr_data[:,2]==uselik,:]
+            print snr_data.shape
+            noise_vals = np.unique(snr_data[:,1])
+            mean_score = [np.mean(snr_data[snr_data[:,1]==nv,col]) for nv in noise_vals]
+            noise_vals[noise_vals==0] = 1e-6
+            if uselik:
+                plt.semilogx(noise_vals,mean_score,":",label="{} {}".format(snr,uselik))
+            else:
+                plt.semilogx(noise_vals,mean_score,label="{} {}".format(snr,uselik))
     plt.legend()
     
 

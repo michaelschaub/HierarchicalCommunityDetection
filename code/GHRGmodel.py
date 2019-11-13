@@ -97,6 +97,10 @@ class GHRG(nx.DiGraph):
             #create ordered list of child nodes
             self.node[node]['children']=self.successors(node)
             self.node[node]['children'].sort()
+            if not self.node[node].has_key('level'):
+                self.node[node]['level'] = level
+
+            #~ print "LEVEL, # children\n", level, node, len(self.node[node]['children']), node in self.leaf_nodes
 
             if self.directed:
 
@@ -104,12 +108,12 @@ class GHRG(nx.DiGraph):
                     for cj,childj in enumerate(self.node[node]['children']):
                         if ci != cj:
                             self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
-                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
+                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[self.node[node]['level']][ci,cj]
 
                 if node in self.leaf_nodes:
                     #~ print ci,cj
                     self.node[node]['Nr'] = np.array([[self.node[node]['n']*self.node[node]['n']]])
-                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
+                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[self.node[node]['level']-1][ci,ci]]])
 
             else:
 
@@ -117,61 +121,34 @@ class GHRG(nx.DiGraph):
                     for cj,childj in enumerate(self.node[node]['children'][ci:],ci):
                         if ci != cj:
                             self.node[node]['Nr'][ci,cj] = self.node[childi]['n']*self.node[childj]['n']
-                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[level][ci,cj]
+                            self.node[node]['Er'][ci,cj] = self.node[node]['Nr'][ci,cj] * omega[self.node[node]['level']][ci,cj]
 
                 if node in self.leaf_nodes:
                     #~ print ci,cj
                     self.node[node]['Nr'] = (np.array([[self.node[node]['n']*self.node[node]['n']]])- self.node[node]['n'])/2
-                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[level-1][ci,ci]]])
+                    self.node[node]['Er'] = np.array([[self.node[node]['Nr'][0,0] * omega[self.node[node]['level']-1][ci,ci]]])
+
+                    #~ parent = self.node[node]['ancestor']
+                    #~ if len(self.node[parent]['children'])==1:
+                        #~ print "YES"
+
+                if len(self.node[node]['children'])==1:
+                    self.node[self.node[node]['children'][0]]['level'] = self.node[node]['level']
+                    #~ print "children",self.node[node]['children']
+                #~ print self.node[node]['level']
+
 
     def setLeafNodeOrder(self):
         """
         Function to identify and store leaf nodes (i.e. dendro nodes with no children) in
         internal data structure
         """
-        self.leaf_nodes = [v for v in nx.dfs_preorder_nodes(self, self.root_node) if self.out_degree(v) == 0]
-
+        leafs = sorted([v for v in nx.dfs_preorder_nodes(self, self.root_node) if self.out_degree(v) == 0])
+        self.leaf_nodes  = leafs
 
     ##
     ## PART 2 --- OUTPUT INFORMATION STORED IN DENDROGRAM
     ##
-
-    def generateNetwork_parameters(self,directed=False):
-        """
-        Return a list of Ers and Nrs (edges and possible edges) that represent the GHRG
-        """
-        if directed:
-            error('directed case not defined yet')
-
-        Ers=[]
-        Nrs=[]
-
-        #cycle through nodes and generate edges
-        for v in self.nodes_iter():
-
-            children=self.node[v]['children']
-            Nr=self.node[v]['Nr']
-            Er=self.node[v]['Er']
-            if not directed:
-                Nr = np.triu(Nr)
-                Er = np.triu(Er)
-
-            for ci,cj in izip(*Nr.nonzero()):
-                try:
-                    childi=self.node[children[ci]]
-                    childj=self.node[children[cj]]
-                except IndexError:      # if it is a leaf node
-                    childi=self.node[v]
-                    childj=self.node[v]
-
-                Ers.append(Er[ci,cj])
-                if ci == cj:
-                    #~ Nrs.append(0.5*childi['n']*(childi['n']-1))
-                    Nrs.append(Nr[ci,cj])       ##REMOVE this line after issue with compute_number_links_between_groups
-                else:
-                    Nrs.append(Nr[ci,cj])
-
-        return Ers,Nrs
 
     def print_nodes(self,keys=['Er','Nr']):
         for node in self.nodes_iter():
@@ -188,7 +165,7 @@ class GHRG(nx.DiGraph):
         """
 
         # global partition at root node
-        part_vector=np.zeros(self.node[self.root_node]['n'])
+        part_vector=np.zeros(self.node[self.root_node]['n'],dtype=int)
 
         nr_levels = nx.dag_longest_path_length(self)
         if level > nr_levels:
@@ -200,8 +177,12 @@ class GHRG(nx.DiGraph):
         for current_level in range(level):
             current_level_dendro_nodes = []
             for parent in current_parent_nodes:
-                current_level_dendro_nodes = current_level_dendro_nodes + self.successors(parent)
-            current_parent_nodes = current_level_dendro_nodes
+                if self.node[parent]['children'] != []:
+                    current_level_dendro_nodes = current_level_dendro_nodes + self.successors(parent)
+                else:
+                    current_level_dendro_nodes = current_level_dendro_nodes + [parent]
+            current_parent_nodes = sorted(current_level_dendro_nodes)
+            # print "2 Current level nodes", current_level_dendro_nodes, "\n"
 
         for ni, node in enumerate(current_parent_nodes):
             children=self.node[node]['nnodes']
@@ -228,63 +209,60 @@ class GHRG(nx.DiGraph):
         """ Output graph as sparse matrix"""
         return nx.to_scipy_sparse_matrix(G)
 
-    def _get_child_params(self,v):
-        #recursively obtain child node params
-        Nrs=[]
-        Ers=[]
-        nr=[]
-        for child in self.node[v]['children']:
-            Nr,Er=self._get_child_params(child)
-            Nrs.append(Nr)
-            Ers.append(Er)
-            nr.append(len(Nr))
-        #current node params
-        Nr=self.node[v]['Nr']
-        Er=self.node[v]['Er']
-
-        block_Nr=[]#np.empty((len(nr),len(nr)),dtype=object)
-        block_Er=[]#np.empty((len(nr),len(nr)),dtype=object)
-
-        for ci,childi in enumerate(self.node[v]['children']):
-            block_Nr.append([])
-            block_Er.append([])
-            for cj,childi in enumerate(self.node[v]['children']):
-                if ci==cj:
-                    block_Er[ci].append(Ers[ci])
-                    block_Nr[ci].append(Nrs[ci])
-                else:
-                    block_Nr[ci].append(Nr[ci,cj]*np.ones((nr[ci],nr[cj])))
-                    block_Er[ci].append(Er[ci,cj]*np.ones((nr[ci],nr[cj])))
-
-        try:
-            return np.bmat(block_Nr).getA(),np.bmat(block_Er).getA()
-        except ValueError:
-            return Nr,Er
-
     def construct_full_block_params(self):
-        return self._get_child_params(self.root_node)
+        leafs = self.leaf_nodes
+        leafs_to_ids = {}
+        for index, leaf in enumerate(leafs):
+            leafs_to_ids[leaf] = index
+        omega_size = len(leafs)
+        omega = np.zeros((omega_size,omega_size))
 
-    def detectability_report(self):
-        """Report whether block structure is detectable"""
-        # TODO
-        pass
+        # fill diagonal
+        for ii, v in enumerate(self.leaf_nodes):
+            Nr=self.node[v]['Nr']
+            Er=self.node[v]['Er']
+            omega[ii,ii] = Er/Nr
+            
+        for v in self.nodes_iter():
+            if v in self.leaf_nodes:
+                continue
+            else:
+                # we symmetrize as only upper triangular part is stored
+                Nr=self.node[v]['Nr']
+                Nr = Nr + Nr.T
+                Er=self.node[v]['Er']
+                Er = Er + Er.T
+                # connect all children of branch i with all children of branch j with probability p_ij as stored in node
+                for ii, childi in enumerate(self.node[v]['children']):
+                    child_i_allchildren = [u for u in nx.dfs_preorder_nodes(self, childi) if self.out_degree(u) == 0]
+                    for jj, childj in enumerate(self.node[v]['children']):
+                        if ii == jj:
+                            continue
+                        else:
+                            child_j_allchildren = [u for u in nx.dfs_preorder_nodes(self, childj) if self.out_degree(u) == 0]
+                        seti = [leafs_to_ids[ci] for ci in child_i_allchildren]
+                        setj = [leafs_to_ids[cj] for cj in child_j_allchildren]
+                        omega[np.ix_(seti,setj)] = Er[ii,jj]/Nr[ii,jj]
+        return omega
 
-    def find_closest_common_ancestor(self,nodelist):
-        """ Find the common ancestor of two leaf nodes"""
-        self.setLeafNodeOrder()
-        common_ancestors = set(self.nodes()) - set(self.leaf_nodes)
-        for node in nodelist:
-            if node not in self.leaf_nodes:
-                raise ValueError("You should provide a list of leaf nodes!")
-            ancestors_node = nx.ancestors(self,node)
-            common_ancestors= common_ancestors.intersection(ancestors_node)
-            ordered_ancestors = nx.topological_sort(self, reverse=True)
+    def checkDetectabliityGeneralSBM(self):
+        """
+        Given a SBM with affinity matrix omega and group size distribuution nc, compute
+        whether there is something detectable here.
+        """
 
-        for node in ordered_ancestors:
-            if node in common_ancestors:
-                return node
+        omega = self.construct_full_block_params()
+        pvec = self.get_partition_at_level(-1)[0]
+        nc = [sum(pvec == i) for i in xrange(pvec.max() + 1)]
+        # form matrix M
+        M = omega.dot(np.diag(nc,0))
+        u = scipy.linalg.eigvals(M)
+        idx = u.argsort()[::-1]
+        eigenvalues = u[idx]
 
+        snr = eigenvalues[1]**2 / eigenvalues[0]
 
+        return snr
     ##
     ## PART 3 --- SAMPLING FUNCTIONS
 
@@ -306,7 +284,7 @@ class GHRG(nx.DiGraph):
         probability of connection with other blocks by working up to the root of the tree.
         """
         if self.directed:
-            error('directed case not defined yet')
+            raise KeyError('directed case not defined yet')
         else:
             # create new graph and make sure that all nodes are added
             # even though the graph might be disconnected
@@ -337,12 +315,12 @@ class GHRG(nx.DiGraph):
                     elif edgeProb=='exact':
                         p = Er[ci,cj]/Nr[ci,cj]
                     else :
-                        error('edge probabilities undefined')
+                        raise ValueError('edge probabilities undefined')
                 except ValueError:
                     print "Something went wrong when sampling from the model"
 
                 if ci == cj and len(children) != 0:
-                    error("Only leave nodes should have a nonzero diagonal specified")
+                    raise AttributeError("Only leave nodes should have a nonzero diagonal specified")
 
                 # create edges to insert
                 edges = (np.random.rand(childi['n']*childj['n'])< p).reshape((childi['n'],childj['n']))
@@ -357,127 +335,3 @@ class GHRG(nx.DiGraph):
             G.remove_edges_from(G.selfloop_edges())
 
         return G
-
-
-    ###
-    ### PART 4 --- INFERENCE FUNCTIONS (call external function)
-    ###
-    def infer_spectral_partition_flat(self, A, mode='Bethe', num_groups=-1, regularizer='BHa'):
-        """ Recursively split graph into pieces by employing a spectral clustering strategy.
-
-        Inputs: A          -- input adjacency matrix
-                mode       -- variant of spectral clustering to use (reg. Laplacian, Bethe Hessian, Non-Backtracking)
-                num_groups -- in how many groups do we want to split the graph at each step
-                              (default: 2; set to -1 to infer number of groups from spectrum)
-
-                Output: networkx dendrogram
-        """
-        # The function consists of mainly two parts
-        # A) call spectral partition algorithm
-        # B) assemble the output into the corresponding DHRG data structure
-
-        ##########
-        # PART (A)
-        nr_nodes = A.shape[0]
-        partition = spectral.spectral_partition(A, mode=mode, num_groups=num_groups, regularizer=regularizer)
-
-
-        ##########
-        # PART (B)
-        # initialise networkx output dendrogram, and store some things as properties of the graph
-        # create root node and assign properties
-        self.network_nodes = np.arange(nr_nodes)
-        self.directed = False
-        self.root_node = 0
-
-        # compute link matrices
-        Emat, Nmat = spectral.compute_number_links_between_groups(A,partition,directed=False)
-        # print "Emat, Nmat computed undirected"
-        # print Emat, "\n", Nmat,"\n\n\n"
-        Er_wod = Emat - np.diag(np.diag(Emat))
-        Nr_wod = Nmat - np.diag(np.diag(Nmat))
-
-        # add statistic to root
-        self.add_node(self.root_node, Er=Er_wod, Nr=Nr_wod)
-        self.node[self.root_node]['nnodes'] = self.network_nodes
-        self.node[self.root_node]['n'] = nr_nodes
-
-        # add children
-        nr_groups = partition.max()+1
-        nodes_next_level = self.add_children(self.root_node, nr_groups)
-        self.node[self.root_node]['children'] = nodes_next_level
-
-        # initialize children
-        for i, n in enumerate(nodes_next_level):
-            subpart = partition == i
-            self.node[n]['nnodes'] = subpart.nonzero()[0]
-            self.node[n]['n'] = len(subpart.nonzero()[0])
-            self.node[n]['children'] = []
-            self.node[n]['Er'] = Emat[i,i]
-            self.node[n]['Nr'] = Nmat[i,i]
-
-    def infer_spectral_partition_hier(self, A, thresh_method='analytic'):
-        """ Recursively split graph into pieces by employing a spectral clustering strategy.
-
-        Inputs: A          -- input adjacency matrix
-                Output: networkx dendrogram
-        """
-        # The function consists of mainly two parts
-        # A) call spectral partition algorithm
-        # B) assemble the output into the corresponding GHRG data structure
-
-        ##########
-        # PART (A)
-        # partition go from finest partition_hier[0] to coarsest partition_hier[-1]
-        nr_nodes = A.shape[0]
-        partition_hier, partition_hier_compressed = spectral.hier_spectral_partition(A, thresh_method=thresh_method)
-
-        self.network_nodes = np.arange(nr_nodes)
-        # directed here means that the represented network is directed, the dendrogram
-        # is always directed
-        self.directed = False
-        self.root_node = 0
-
-        # add root
-        self.add_node(self.root_node)
-        self.node[self.root_node]['nnodes'] = self.network_nodes
-        self.node[self.root_node]['n'] = nr_nodes
-
-        roots_next_level = [self.root_node]
-
-        # 2)  There is more than one level beneath the root, so we have to
-        # recursived built the tree
-        while len(partition_hier) > 0:
-            partition = partition_hier.pop()
-
-            roots_current_level = roots_next_level
-            roots_next_level = []
-
-            Emat, Nmat = spectral.compute_number_links_between_groups(A, partition, directed=False)
-            Er_wod = Emat - np.diag(np.diag(Emat))
-            Nr_wod = Nmat - np.diag(np.diag(Nmat))
-
-            # check current candidate root nodes
-            for index, node_id in enumerate(roots_current_level):
-                # if we are not at the lowest level, we need to add more layers
-                corresponding_nodes = self.node[node_id]['nnodes']
-                subpart = partition[corresponding_nodes]
-                subgroups = np.unique(subpart)
-                nr_subgroups = subgroups.size
-                index2 = np.ix_(subgroups, subgroups)
-                self.node[node_id]['Er'] = Er_wod[index2]
-                self.node[node_id]['Nr'] = Nr_wod[index2]
-
-                # print subpart
-                children_set = self.add_children(node_id, nr_subgroups)
-                self.node[node_id]['children'] = children_set
-                roots_next_level = roots_next_level + children_set
-            for i, n in enumerate(roots_next_level):
-                subpart = partition == i
-                self.node[n]['nnodes'] = subpart.nonzero()[0]
-                self.node[n]['n'] = len(subpart.nonzero()[0])
-                # if leaf node we want to add this information...
-                # note that this will be overwritten in the next iteration
-                self.node[n]['children'] = []
-                self.node[n]['Er'] = Emat[i, i]
-                self.node[n]['Nr'] = Nmat[i, i]

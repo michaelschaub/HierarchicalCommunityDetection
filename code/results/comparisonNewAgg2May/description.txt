@@ -1,0 +1,3 @@
+commit hash -- 3008743c15d76ae1ff
+updated test run with increased noise level after bugfix for std deviation estimator
+compare new and old code with same noise level
