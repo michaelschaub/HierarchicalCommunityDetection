@@ -48,7 +48,7 @@ def calcVI(partitions):
 
 def variation_of_information_sim(partition1,partition2):
     """ 
-    Compute 1 minus the normalized variation of information vi \in [0,1] between two partition
+    Compute 1 minus the normalized variation of information vi in [0,1] between two partition
     1-vi = 1 -> perfect recovery
     1-vi = 0 -> worst possible result
     """

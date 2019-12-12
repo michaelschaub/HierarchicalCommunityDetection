@@ -440,7 +440,7 @@ def expected_errors_random_projection(dim_n,levels):
     expected_error = []
     for i,j in start_end_pairs:
         Ks = np.arange(i,j)
-        errors = (Ks - i) * (j - Ks) / dim_n
+        errors = (Ks - i) * (j - Ks) / (j-i)
         expected_error = np.hstack([expected_error,errors])
     expected_error = np.hstack([expected_error,0])
     return expected_error
@@ -501,6 +501,9 @@ def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglom
         levels = levels + [next_level]
         levels.sort()
         expected_error = expected_errors_random_projection(errors.size, levels)
+        plt.figure(222)
+        Ks = np.arange(expected_error.size) + 1
+        plt.plot(Ks,expected_error)
         next_level, _ = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
 
     print "list_candidate_agglomeration"
