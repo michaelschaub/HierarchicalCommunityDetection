@@ -249,13 +249,16 @@ def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, nois
         # plt.imshow(Aagg-np.diag(np.diag(Aagg)))
 
         if find_levels:
-            errors, std_errors, hier_partition_vecs = identify_next_level(
+            errors, std_errors, hier_partition_vecs, all_errors = identify_next_level(
                 Aagg, Ks, model=model, reg=False, norm='Fnew', reps=reps, noise=noise)
 
             # plt.figure(125)
             # plt.errorbar(Ks, errors,std_errors)
+            # selected, below_thresh = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
 
-            selected, below_thresh = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
+            errors_max = np.max(all_errors,axis=1)
+            selected, below_thresh = find_all_relevant_minima_from_errors(
+                errors_max, std_errors, list_candidate_agglomeration)
             selected = selected -1
             print "selected (before), ", selected
             selected = selected[:-1]
@@ -342,7 +345,7 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
     return Ks[:-1], [partition_vec]
 
 
-def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=1e-2):    
+def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=2e-2):    
     """
     Identify agglomeration levels by checking the projection errors and comparing the to a
     perturbed verstion of the same network
@@ -361,32 +364,23 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
         hier_partition_vecs -- found putative hier partitions
 
     """
-
     # first identify partitions and their projection error
-    Ks, _, partition_vecs = identify_partitions_and_errors(A, Ks, model, reg, norm, partition_vecs=[])
+    Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(
+        A, Ks, model, reg, norm, partition_vecs=[])
+    all_errors = np.zeros((len(Ks),reps))
+    # plt.figure(125)
+    # plt.plot(Ks, sum_errors2, 'o')
 
     # repeat with noise
-    if reps > 0:
+    for kk in xrange(reps):
+        Anew = add_noise_to_small_matrix(A, snr=noise)
+        _, errors, _ = identify_partitions_and_errors(Anew, Ks, model, reg, norm, partition_vecs)
+        all_errors[:,kk] = errors
 
-        sum_errors = 0.
-        std_errors = 0.
-        m = 0.
+    sum_errors = np.mean(all_errors,axis=1)
+    std_errors = np.std(all_errors,axis=1)
 
-        for kk in xrange(reps):
-            Anew = add_noise_to_small_matrix(A, snr=noise)
-            _, errors, _ = identify_partitions_and_errors(Anew, Ks, model, reg, norm, partition_vecs)
-            sum_errors += errors
-
-            # calculate online variance
-            m_prev = m
-            m = m + (errors - m) / (kk + 1)
-            std_errors = std_errors + (errors - m) * (errors - m_prev)
-
-        sum_errors /= reps
-        std_errors = np.sqrt(std_errors/(reps-1))
-
-    return sum_errors, std_errors, partition_vecs
-
+    return sum_errors, std_errors, partition_vecs, all_errors
 
 def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', partition_vecs=[]):
     """
@@ -452,15 +446,16 @@ def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
 
     # find points below relative error
     nonzero = expected_error != 0
-    relerror[nonzero] = (errors[nonzero] + 3*std_errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
-    threshold = -0.5
+    relerror[nonzero] = (errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
+    threshold = -0.8
     below_thresh = np.nonzero(relerror < threshold)[0]
     plt.figure(12)
     plt.plot(np.arange(1,relerror.size+1),relerror)
     plt.plot(np.arange(1,relerror.size+1),threshold*np.ones(relerror.size))
 
     # find relative minima
-    ratio_error[nonzero] = (errors[nonzero] + 3*std_errors[nonzero])/ expected_error[nonzero]
+    # TODO: make ratio with worst case error?
+    ratio_error[nonzero] = (errors[nonzero] )/ expected_error[nonzero]
     local_min = argrelmin(ratio_error)[0]
     plt.figure(13)
     plt.plot(np.arange(1,ratio_error.size+1),ratio_error)
