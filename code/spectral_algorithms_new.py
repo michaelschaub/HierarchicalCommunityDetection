@@ -179,7 +179,7 @@ def hier_spectral_partition(A, model='SBM', reps=10, noise=2e-2, Ks=None):
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=False):
+def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=True):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
