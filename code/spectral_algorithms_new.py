@@ -27,7 +27,6 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering
 from sklearn import preprocessing
 from sklearn import mixture
-from sklearn.utils.extmath import randomized_svd
 
 #TODO: we probably want to have a more clean import.
 from helperfunctions import *
@@ -179,7 +178,7 @@ def hier_spectral_partition(A, model='SBM', reps=10, noise=2e-2, Ks=None):
     return pvec_agg
 
 
-def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=True):
+def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, noise=2e-2, Ks=None, ind_levels_across_agg=True, plots=True):
     """
     Given a graph A and an initial partition, check for possible agglomerations within
     the network.
@@ -236,33 +235,24 @@ def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, nois
 
     while len(Ks) > 0:
 
-        print "List of partitions to assess: ", Ks, "\n"
+        print "List of partitions to assess:\n", Ks, "\n"
         print "Current shape of network: ", A.shape, "\n"
         print "Current levels: ", levels, "\n"
 
-        # TODO The normalization seems important for good results -- why?
-        # should we normalize by varaiance of Bernoullis as well?
         Eagg, Nagg = compute_number_links_between_groups(A, partition)
         Aagg = Eagg / Nagg
-        # print "OMEGA estimate"
-        # plt.figure()
-        # plt.imshow(Aagg-np.diag(np.diag(Aagg)))
 
         if find_levels:
-            errors, std_errors, hier_partition_vecs, all_errors = identify_next_level(
+            mean_errors, std_errors, hier_partition_vecs, all_errors = identify_next_level(
                 Aagg, Ks, model=model, reg=False, norm='Fnew', reps=reps, noise=noise)
-
-            # plt.figure(125)
-            # plt.errorbar(Ks, errors,std_errors)
-            # selected, below_thresh = find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration)
-
             errors_max = np.max(all_errors,axis=1)
-            selected, below_thresh = find_all_relevant_minima_from_errors(
-                errors_max, std_errors, list_candidate_agglomeration)
-            selected = selected -1
-            print "selected (before), ", selected
-            selected = selected[:-1]
-            print "Ks: ", Ks, " selected: ", selected
+
+            if plots:
+                plt.figure(Ks[-1])
+                plt.plot(Ks, all_errors, '.',color="gray",alpha=0.5)
+                plt.plot(Ks, errors_max, 'k',linewidth = 2)
+            selected, below_thresh = find_all_relevant_minima_from_errors(errors_max, std_errors, list_candidate_agglomeration)
+            selected = selected[:-1] -1
             Ks = Ks[selected]
             print "Minima at", Ks
             hier_partition_vecs = [hier_partition_vecs[si] for si in selected]
@@ -281,7 +271,7 @@ def hier_spectral_partition_agglomerate(A, partition, model='SBM', reps=20, nois
                     Ks = np.arange(1, k+1)
                     list_candidate_agglomeration = Ks
                 else:
-                # TODO: it might be useful to pass down candidates
+                # it can be useful to pass down candidates
                 # from previous agglomeration rounds here instead of starting from scratch!
                     list_candidate_agglomeration = below_thresh + 1
                     print "updated list"
@@ -345,7 +335,7 @@ def identify_partitions_at_level(A, Ks, model='SBM', reg=False):
     return Ks[:-1], [partition_vec]
 
 
-def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=2e-2):    
+def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noise=2e-2, Plots=True):    
     """
     Identify agglomeration levels by checking the projection errors and comparing the to a
     perturbed verstion of the same network
@@ -365,11 +355,16 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
 
     """
     # first identify partitions and their projection error
-    Ks, sum_errors2, partition_vecs = identify_partitions_and_errors(
+    Ks, mean_errors, partition_vecs = identify_partitions_and_errors(
         A, Ks, model, reg, norm, partition_vecs=[])
     all_errors = np.zeros((len(Ks),reps))
-    # plt.figure(125)
-    # plt.plot(Ks, sum_errors2, 'o')
+
+    if Plots:
+        fignum = Ks[-1]
+        plt.figure(fignum)
+        plt.plot(Ks, mean_errors, 'ob',markersize=4,alpha=0.7)
+        plt.xlabel("Number of groups")
+        plt.ylabel("Projection error $\\varepsilon$")
 
     # repeat with noise
     for kk in xrange(reps):
@@ -377,10 +372,10 @@ def identify_next_level(A, Ks, model='SBM', reg=False, norm='Fnew', reps=20, noi
         _, errors, _ = identify_partitions_and_errors(Anew, Ks, model, reg, norm, partition_vecs)
         all_errors[:,kk] = errors
 
-    sum_errors = np.mean(all_errors,axis=1)
+    mean_errors = np.mean(all_errors,axis=1)
     std_errors = np.std(all_errors,axis=1)
 
-    return sum_errors, std_errors, partition_vecs, all_errors
+    return mean_errors, std_errors, partition_vecs, all_errors
 
 def identify_partitions_and_errors(A, Ks, model='SBM', reg=False, norm='Fnew', partition_vecs=[]):
     """
@@ -439,26 +434,29 @@ def expected_errors_random_projection(dim_n,levels):
     expected_error = np.hstack([expected_error,0])
     return expected_error
 
-def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
-    #TODO: how to choose the threshold? 
+def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error,plots=True):
     relerror = np.zeros(expected_error.size) 
     ratio_error = np.zeros(expected_error.size) 
 
     # find points below relative error
     nonzero = expected_error != 0
-    relerror[nonzero] = (errors[nonzero] - expected_error[nonzero]) / expected_error[nonzero]
-    threshold = -0.8
+    relerror[nonzero] = (errors[nonzero]) / expected_error[nonzero]
+    threshold = 0.2
     below_thresh = np.nonzero(relerror < threshold)[0]
-    plt.figure(12)
-    plt.plot(np.arange(1,relerror.size+1),relerror)
-    plt.plot(np.arange(1,relerror.size+1),threshold*np.ones(relerror.size))
+    
+    if plots:
+#         plt.figure(111)
+#         plt.plot(np.arange(1,relerror.size+1),relerror)
+#         plt.plot(np.arange(1,relerror.size+1),threshold*np.ones(relerror.size))
+        plt.figure(expected_error.size)
+        plt.plot(np.arange(1,relerror.size+1),expected_error*0.2,"--",linewidth=2)
+        plt.figure(expected_error.size)
+        plt.plot(np.arange(1,relerror.size+1),expected_error,"-.",linewidth=2)
+    
 
     # find relative minima
-    # TODO: make ratio with worst case error?
     ratio_error[nonzero] = (errors[nonzero] )/ expected_error[nonzero]
     local_min = argrelmin(ratio_error)[0]
-    plt.figure(13)
-    plt.plot(np.arange(1,ratio_error.size+1),ratio_error)
 
     # levels == below thres && local min
     levels = np.intersect1d(local_min, below_thresh).astype(int)
@@ -476,37 +474,36 @@ def find_smallest_relevant_minima_from_errors(errors,std_errors,expected_error):
         print "agglomeration level candidate"
         print best_level
 
-    # plt.figure(9)
-    # plt.plot(np.arange(1,errors.size+1), relerror)
     return best_level, below_thresh
 
-def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration):
+def find_all_relevant_minima_from_errors(errors,std_errors,list_candidate_agglomeration, plots=True):
     """Given a set of error and standard deviations, find best minima"""
     levels = [1,errors.size]
     expected_error = expected_errors_random_projection(errors.size,levels)
 
-    # plot candidate levels vs. errors
-    plt.figure(222)
-    Ks = np.arange(expected_error.size) + 1
-    plt.plot(Ks,expected_error)
-    plt.errorbar(Ks,errors,std_errors)
+    if plots:
+        # plot candidate levels vs. errors
+        plt.figure(222)
+        Ks = np.arange(expected_error.size) + 1
+        plt.plot(Ks,expected_error)
 
     next_level, below_thresh = find_smallest_relevant_minima_from_errors(errors,std_errors, expected_error)
     while next_level != -1:
         levels = levels + [next_level]
         levels.sort()
         expected_error = expected_errors_random_projection(errors.size, levels)
-        plt.figure(222)
-        Ks = np.arange(expected_error.size) + 1
-        plt.plot(Ks,expected_error)
         next_level, _ = find_smallest_relevant_minima_from_errors(errors, std_errors,expected_error)
+        if plots:
+            plt.figure(222)
+            Ks = np.arange(expected_error.size) + 1
+            plt.plot(Ks,expected_error)
 
-    print "list_candidate_agglomeration"
+    print "\n\nlist_candidate_agglomeration"
     print list_candidate_agglomeration
-    print "levels"
+    print "levels estimated"
     print levels
     levels = np.intersect1d(np.array(levels),list_candidate_agglomeration)
-    print "levels updated"
+    print "levels candidate intersect with estimated"
     print levels
 
     # remove again the level 1 entry
@@ -550,25 +547,22 @@ def find_partition(evecs, k, model, method='KM', n_init=20):
         clust = KMeans(n_clusters=k, n_init=n_init,n_jobs=2)
         clust.fit(X)
         partition_vec = clust.labels_
-        partition_vec = relabel_partition_vec(partition_vec)
     elif method == 'GMM':
         GMM = mixture.GaussianMixture(n_components=k, covariance_type='full', n_init=n_init)
         GMM.fit(X)
         partition_vec = GMM.predict(X)
-        partition_vec = relabel_partition_vec(partition_vec)
     elif method == 'GMMspherical':
         GMM = mixture.GaussianMixture(n_components=k, covariance_type='spherical', n_init=n_init)
         GMM.fit(X)
         partition_vec = GMM.predict(X)
-        partition_vec = relabel_partition_vec(partition_vec)
     elif method == 'GMMdiag':
         GMM = mixture.GaussianMixture(n_components=k, covariance_type='diag', n_init=n_init)
         GMM.fit(X)
         partition_vec = GMM.predict(X)
-        partition_vec = relabel_partition_vec(partition_vec)
     else:
         raise ValueError('something went wrong. Please specify valid clustering method')
-
+        
+    partition_vec = relabel_partition_vec(partition_vec)
     H = create_normed_partition_matrix_from_vector(partition_vec, model)
 
     return partition_vec, H
