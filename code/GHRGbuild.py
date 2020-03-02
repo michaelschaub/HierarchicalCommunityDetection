@@ -32,7 +32,7 @@ def calculateDegreesFromAvDegAndSNR(SNR,av_degree,num_cluster=2):
     """
     # SNR, a= in-weight, b = out-weight
     # SNR = (a-b)^2 / (ka + k(k-1)*b) = (a-b)^2 / [k^2 *av_degree]
-    # av_degree = a/k + (k-1)*b/k = a-b /k + b
+    # av_degree = a/k + (k-1)*b/k = (a-b) /k + b
     amb = num_cluster * np.sqrt(av_degree*SNR)
     b = av_degree - amb/float(num_cluster)
     a = amb + b

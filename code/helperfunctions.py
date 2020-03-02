@@ -264,7 +264,7 @@ def orthogonalizeQR_randomized(EV, gamma=4):
 ###################################################
 
 
-def compute_number_links_between_groups(A, partition_vec, directed=True):
+def compute_number_links_between_groups(A, partition_vec, directed=True, self_loops = False):
     """
     Compute the number of possible and actual links between the groups indicated in the
     partition vector.
@@ -282,18 +282,20 @@ def compute_number_links_between_groups(A, partition_vec, directed=True):
     links_between_groups = pmatrix.T * A * pmatrix
     links_between_groups = links_between_groups.A
 
-    if not directed:
-        links_between_groups = links_between_groups - np.diag(np.diag(links_between_groups)) / 2.0
-        links_between_groups = np.triu(links_between_groups)
-
     # convert to array type first, before performing outer product
     nodes_per_group = pmatrix.sum(0).A
     possible_links_between_groups = np.outer(nodes_per_group, nodes_per_group)
 
-    if not directed:
+    # if we do not allow self-loops this needs adjustment.
+    if not self_loops:
         possible_links_between_groups = possible_links_between_groups - np.diag(nodes_per_group.flatten())
-        possible_links_between_groups = possible_links_between_groups - \
-            np.diag(np.diag(possible_links_between_groups)) / 2.0
+    
+    if not directed:        
+        # we need to scale diagonal only by factor 2
+        links_between_groups = links_between_groups - np.diag(np.diag(links_between_groups)) / 2.0
+        links_between_groups = np.triu(links_between_groups)
+    
+        possible_links_between_groups = possible_links_between_groups - np.diag(np.diag(possible_links_between_groups)) / 2.0
         possible_links_between_groups = np.triu(possible_links_between_groups)
 
     return links_between_groups, possible_links_between_groups
@@ -324,7 +326,7 @@ def add_noise_to_small_matrix(M, snr=0.001, noise_type="gaussian"):
     """Add some small random noise to a (dense) small matrix as a perturbation"""
 
     # noise level is taken relative to the Froebenius norm
-    normM = scipy.linalg.norm(M)
+    normM = scipy.linalg.norm(M,2)
 
     if noise_type == "uniform":
         # TODO -- should we have uniform noise?
@@ -333,7 +335,7 @@ def add_noise_to_small_matrix(M, snr=0.001, noise_type="gaussian"):
         n, m = M.shape
         noise = scipy.triu(scipy.random.randn(n, m))
         noise = noise + noise.T - scipy.diag(scipy.diag(noise))
-        normNoise = scipy.linalg.norm(noise)
+        normNoise = scipy.linalg.norm(noise,2)
         Mp = M + snr * normM / normNoise * noise
 
     return Mp
