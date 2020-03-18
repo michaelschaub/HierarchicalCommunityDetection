@@ -239,12 +239,14 @@ def plot_complete(groups_per_level=3, n_levels=3,prefix="results",mode='full'):
     plt.axvline(1,ls=':',color='k',lw=0.5)
     plt.axhline(0,color='k',lw=0.5)
     plt.legend()
+    plt.xlabel("SNR")
+    plt.ylabel("Overlap Score")
     plt.tight_layout()
 
     fig, ax1 = plt.subplots()
     color = 'tab:blue'
     ax1.plot(snrs, overlap, label='overlap',color=color)
-    ax1.set_ylabel('overlap',color=color)
+    ax1.set_ylabel('Overlap score',color=color)
     ax1.set_xlabel('SNR')
     ax1.tick_params(axis='y', labelcolor=color)
 

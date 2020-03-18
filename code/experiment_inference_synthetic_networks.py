@@ -223,6 +223,8 @@ def plot_complete(filename):
     n = len(snrs)
     precision = np.empty(n)
     recall = np.empty(n)
+    precision_std = np.empty(n)
+    recall_std = np.empty(n)
     overlap = np.empty(n)
     levels = np.empty(n)
 
@@ -233,20 +235,25 @@ def plot_complete(filename):
         recall[si] = np.mean(scores[idxs, 2])
         overlap[si] = np.mean(scores[idxs, 3])
         levels[si] = np.mean(scores[idxs, 4])
+        precision_std[si] = np.std(scores[idxs, 1])
+        recall_std[si] = np.std(scores[idxs, 2])
 
     # plot precision recall
     plt.figure()
-    plt.plot(snrs, precision, label='precision')
-    plt.plot(snrs, recall, label='recall')
-    plt.axvline(1, ls=':', color='k', lw=0.5)
-    plt.axhline(0, color='k', lw=0.5)
+    plt.errorbar(snrs, precision, yerr=precision_std, label='Precision')
+    plt.errorbar(snrs, recall, yerr=recall_std, label='Recall')
+    plt.axvline(1, ls=':', color='r', lw=1)
+    plt.text(1.2,0.9,"Detectability limit",style='italic',rotation=90, color="r")
     plt.legend()
+    plt.xlabel("SNR")
+    plt.ylabel("Precision & Recall Score")
+    plt.ylim(bottom=0)
     plt.tight_layout()
 
     fig, ax1 = plt.subplots()
     color = 'tab:blue'
     ax1.plot(snrs, overlap, label='overlap', color=color)
-    ax1.set_ylabel('overlap', color=color)
+    ax1.set_ylabel('Adjusted Mutual Information', color=color)
     ax1.set_xlabel('SNR')
     ax1.tick_params(axis='y', labelcolor=color)
 
