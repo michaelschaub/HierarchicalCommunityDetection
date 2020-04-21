@@ -98,6 +98,7 @@ def add_noise_to_small_matrix(M, snr=0.001, noise_type="gaussian"):
 
 class Hierarchy(list):
 
+    # Question: it seems useful to have a constructor with a list of partitions/or an empty Hierarchy (no partition)?
     def __init__(self, partition):
         self.add_level(partition)
         self.n = len(partition.pvec)
