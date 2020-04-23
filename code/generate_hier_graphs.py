@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import scipy
+import scipy.linalg
 import numpy as np
 from HierarchicalGraph import HierarchicalGraph
 
@@ -65,9 +66,9 @@ def sample_block_model(omega, nc, mode = 'undirected'):
 
 def sample_from_block(m,n,pij):
     if pij == 0:
-        block = scipy.sparse.csr_matrix((m,n))
+        block = scipy.sparse.coo_matrix((m,n))
     else:
-        block = (scipy.sparse.random(m,n,density=pij) >0)*1
+        block = (scipy.sparse.rand(m,n,density=pij,format="coo") >0)*1
     return block
 
 

@@ -1,9 +1,9 @@
 import numpy as np
 import metrics
 from inference import infer_hierarchy
-from generate_hier_graphs import create2paramGHRG
+from generate_hier_graphs import create2paramGHRG, generateNetwork
 from matplotlib import pyplot as plt
-
+import time
 
 def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"):
 
@@ -15,11 +15,18 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
 
         for snr in np.arange(0.5, 10.5, 0.5):
 
-            print('\n\nSNR'), snr
+            print('\n\nSNR', snr)
 
             Hgraph = create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level)
+            print("Model generated")
+
             # generate adjacency
-            A = Hgraph.generateNetwork()
+            tic = time.perf_counter()
+            A = generateNetwork(Hgraph)
+            print("adjacency matrix sampled")
+            toc = time.perf_counter()
+            print(f"Sample in {toc - tic:0.4f} seconds")
+
             # get true hierarchy
             true_pvecs = Hgraph.get_partition_all()
 
@@ -27,18 +34,18 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
             inf_pvec = infer_hierarchy(A)
 
             # calculate scores
-            score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvec)
+            score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvecs)
             precision, recall = metrics.calculate_precision_recall(score_matrix)
-            diff_levels = metrics.compare_levels(true_pvec, inf_pvec)
+            diff_levels = metrics.compare_levels(true_pvecs, inf_pvec)
             bottom_lvl = score_matrix[-1, -1]
             print("\n\nRESULTS\n\nbottom level")
             print(bottom_lvl)
-            print(len(inf_pvec), len(true_pvec))
+            print(len(inf_pvec), len(true_pvecs))
             print(diff_levels)
             print("precision, recall")
             print(precision, recall)
 
-            print([len(np.unique(pv)) for pv in true_pvec])
+            print([len(np.unique(pv)) for pv in true_pvecs])
             print([len(np.unique(pv)) for pv in inf_pvec])
 
             with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix, {True: 'sym', False: 'asym'}[symmetric], n_levels, groups_per_level), 'a+') as file:

@@ -12,6 +12,8 @@ from scipy.sparse import eye, diags, issparse, csr_matrix
 
 class SpectralOperator(object):
 
+    operator = None
+
     def find_k_eigenvectors(self, K, which='SA'):
         M = self.operator
         evals, evecs = eigsh(M, K, which=which)
