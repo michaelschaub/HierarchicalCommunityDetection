@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import numpy as np
 import scipy.sparse
-from generate_hier_graphs import sample_block_model
 
 from cluster import Hierarchy
 from cluster import Partition
@@ -59,19 +58,3 @@ class HierarchicalGraph(Hierarchy):
         snr = eigenvalues[1]**2 / eigenvalues[0]
 
         return snr
-
-    ######################
-    ## PART 3 --- SAMPLING
-    ######################
-
-
-    def generateNetwork(self):
-        """
-        Network nodes at each leaf of the dendro are equivalent.  For each leaf work out the
-        probability of connection with other blocks by working up to the root of the tree.
-        """
-        Omega = self.Omega
-        pvec = self.get_partition_at_level(-1).pvec
-        nc = [sum(pvec == i) for i in range(pvec.max() + 1)]
-        A = sample_block_model(Omega,nc)
-        return A
