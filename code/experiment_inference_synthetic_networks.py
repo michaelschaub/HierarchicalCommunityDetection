@@ -13,7 +13,7 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
 
     for rep in range(50):
 
-        for snr in np.arange(6.5, 10.5, 0.5):
+        for snr in np.arange(0.5, 10.5, 0.5):
 
             print('\n\nSNR', snr)
 
@@ -32,9 +32,6 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
 
             # infer partitions 
             inf_pvec = infer_hierarchy(A)
-            print("HERE")
-            print(inf_pvec[0].pvec)
-            print(inf_pvec[1].pvec)
 
             # calculate scores
             score_matrix = metrics.calculate_level_comparison_matrix(inf_pvec, true_pvecs)
