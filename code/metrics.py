@@ -22,16 +22,9 @@ def calculate_level_comparison_matrix(pvecs,true_pvecs,score=adjusted_mutual_inf
     pred_lvls=len(pvecs)
     true_lvls=len(true_pvecs)
     score_matrix=np.zeros((pred_lvls,true_lvls))
-    print(pred_lvls,true_lvls)
-    print(len(pvecs[0].pvec))
-    print(len(pvecs[1].pvec))
-    print(len(pvecs[2].pvec))
-    print(len(true_pvecs[0].pvec))
-    print(len(true_pvecs[1].pvec))
-    print(len(true_pvecs[2].pvec))
     for i in range(pred_lvls):
         for j in range(true_lvls):
-            score_matrix[i,j]=score(pvecs[i].pvec_expanded,true_pvecs[j].pvec)
+            score_matrix[i,j]=score(pvecs[i].pvec_expanded,true_pvecs[j].pvec_expanded,average_method="arithmetic")
 
     return score_matrix
 

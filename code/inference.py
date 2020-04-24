@@ -67,8 +67,8 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
 
         try:
             hierarchy.add_level(partition_list[-1])
-            # hierarchy.expand_partitions_to_full_graph()
-            # partition = expand_partitions_to_full_graph(pvec)[-1]
+            hierarchy.expand_partitions_to_full_graph()
+            partition = cluster.Partition(hierarchy[-1].pvec_expanded)
 
             if find_levels:
                 # QUESTION: do we use ind_levels_across_agg ?

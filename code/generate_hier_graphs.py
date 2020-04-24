@@ -13,7 +13,7 @@ def generateNetwork(hier_graph):
     probability of connection with other blocks by working up to the root of the tree.
     """
     Omega = hier_graph.Omega
-    pvec = hier_graph.get_partition_at_level(-1).pvec
+    pvec = hier_graph.get_partition_at_level(0).pvec
     nc = [sum(pvec == i) for i in range(pvec.max() + 1)]
     A = sample_block_model(Omega,nc)
     return A
@@ -143,15 +143,20 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
             print("no probability > 1 not allowed")
             raise ValueError("Something wrong")
 
-        num_current_groups = groups_per_level**(level+1)
-        pvec = np.kron(np.arange(num_current_groups,dtype=int),np.ones(int(n/num_current_groups),dtype=int))
-        partitions.append(pvec)
-
         n_this_level = n_this_level / groups_per_level
         if np.floor(n_this_level) != n_this_level:
             print("Rounding number of nodes")
 
         c_bar=(cin/n_this_level)*(n_this_level / groups_per_level)
+
+    for level in range(n_levels):
+        num_current_groups = groups_per_level**(level+1)
+        if level == n_levels -1:
+            pvec = np.kron(np.arange(num_current_groups,dtype=int),np.ones(int(n/num_current_groups),dtype=int))
+        else:
+            pvec = np.kron(np.arange(num_current_groups,dtype=int),np.ones(int(groups_per_level),dtype=int))
+        partitions.append(pvec)
+    partitions = partitions[::-1]
     
     matrix = omega[0]
     for level in range(n_levels-1):
@@ -161,7 +166,7 @@ def create2paramGHRG(n,snr,c_bar,n_levels,groups_per_level):
     # Q: should we adjust the Hierarchy constructors to make this less cumbersome
     Hier = Hierarchy(Partition(partitions.pop(0)))
     for pvec in partitions:
-        Hier.append(Partition(pvec))
+        Hier.add_level(Partition(pvec))
     
     graph = HierarchicalGraph(Hier, Omega)
 
@@ -217,7 +222,7 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
     # Q: should we adjust the Hierarchy constructors to make this less cumbersome
     Hier = Hierarchy(Partition(partitions.pop(0)))
     for pvec in partitions:
-        Hier.append(Partition(pvec))
+        Hier.add_level(Partition(pvec))
     
     graph = HierarchicalGraph(Hier, Omega)
 

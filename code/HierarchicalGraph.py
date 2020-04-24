@@ -11,11 +11,12 @@ class HierarchicalGraph(Hierarchy):
     ############################
     ## PART 1 -- CONSTRUCTOR ETC
     ############################
-    def __init__(self, hierarchy=Hierarchy(Partition([0])), omega=0):
+    def __init__(self, hierarchy, omega):
         self.PlantedHier = hierarchy
         self.Omega = omega
-        if len(self.PlantedHier[-1]) != self.Omega.shape[0]:
+        if len(self.PlantedHier[0]) != self.Omega.shape[0]:
             raise NotImplementedError("Finest partition has to match dimensions of affinity matrix")
+        self.PlantedHier.expand_partitions_to_full_graph()
 
 
     ################################

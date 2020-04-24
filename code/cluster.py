@@ -100,16 +100,21 @@ class Hierarchy(list):
 
     # Question: it seems useful to have a constructor with a list of partitions/or an empty Hierarchy (no partition)?
     def __init__(self, partition):
-        self.add_level(partition)
-        self.n = len(partition.pvec)
+        assert type(partition) == Partition
+        self.append(partition)
+        self.n = partition.pvec.size
+        self.k = len(partition)
 
     def add_level(self, partition):
         assert type(partition) == Partition
-        self.append(partition)
+        if partition.pvec.size == len(self[-1]):
+            self.append(partition)
+        else:
+            raise NotImplementedError("partition should be a refinement of the previous partition")
 
     def expand_partitions_to_full_graph(self):
         """
-        Map list of aggregated partition vectors in heirarchy to list of
+        Map list of aggregated partition vectors in hierarchy to list of
         full-sized partition vectors
         """
         # the finest partition is already at the required size
@@ -143,7 +148,10 @@ class Partition(object):
 
     def __init__(self, pvec):
         self.pvec = pvec
+        self.pvec_expanded = pvec
         self.relabel_partition_vec()
+        self.k = len(np.unique(pvec))
+        # below sets self.H and self.Hnorm
         self.create_partition_matrix()
 
     def __len__(self):
@@ -193,7 +201,6 @@ class Partition(object):
         """Create a partition indicator matrix from a given vectors."""
         pvec = self.pvec
         nr_nodes = pvec.size
-        self.k = len(np.unique(pvec))
 
         H = sparse.coo_matrix((np.ones(nr_nodes), (np.arange(nr_nodes), pvec)),
                        shape=(nr_nodes, self.k)).tocsr()
