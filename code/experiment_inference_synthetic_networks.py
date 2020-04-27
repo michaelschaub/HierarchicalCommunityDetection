@@ -5,7 +5,7 @@ from generate_hier_graphs import create2paramGHRG, generateNetwork
 from matplotlib import pyplot as plt
 import time
 
-def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results"):
+def complete_inf(groups_per_level=3, n_levels=3, prefix="results"):
 
     n = 3**9
 
@@ -48,10 +48,10 @@ def complete_inf(symmetric=True, groups_per_level=3, n_levels=3, prefix="results
             print([pv.k for pv in true_pvecs])
             print([pv.k for pv in inf_pvec])
 
-            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix, {True: 'sym', False: 'asym'}[symmetric], n_levels, groups_per_level), 'a+') as file:
+            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix, 'sym', n_levels, groups_per_level), 'a+') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr, precision, recall, bottom_lvl, len(inf_pvec)))
                 for lvl in inf_pvec:
-                    file.write(' {}'.format(len(np.unique(lvl))))
+                    file.write(' {}'.format(lvl.k))
                 file.write('\n')
 
 

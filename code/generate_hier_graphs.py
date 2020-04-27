@@ -210,7 +210,11 @@ def createAsymGHRG(n,snr,c_bar,n_levels,groups_per_level):
         nodes_in_last_group = np.nonzero(start_partition == last_group_index)[0]
         num_nodes_in_last_group = nodes_in_last_group.shape[0]
         start_partition[nodes_in_last_group] = np.kron(last_group_index+np.arange(groups_per_level,dtype=int),np.ones(int(num_nodes_in_last_group/groups_per_level),dtype=int))
-        partitions.append(np.array(start_partition))
+        if level == n_levels-1:
+            partitions.append(np.array(start_partition))
+        else:
+            partitions.append(np.concatenate((np.unique(start_partition),np.ones(2,dtype=int)*start_partition.max())))
+    partitions = partitions[::-1]
 
     matrix = omega[0]
     for level in range(n_levels-1):
