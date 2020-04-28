@@ -48,7 +48,7 @@ def complete_inf(groups_per_level=3, n_levels=3, prefix="results"):
             print([pv.k for pv in true_pvecs])
             print([pv.k for pv in inf_pvec])
 
-            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix, 'sym', n_levels, groups_per_level), 'a+') as file:
+            with open('results/{}_complete_inf_{}_{}_{}.txt'.format(prefix, 'asym', n_levels, groups_per_level), 'a+') as file:
                 file.write('{} {:.3f} {:.3f} {:.3f} {} *'.format(snr, precision, recall, bottom_lvl, len(inf_pvec)))
                 for lvl in inf_pvec:
                     file.write(' {}'.format(lvl.k))
