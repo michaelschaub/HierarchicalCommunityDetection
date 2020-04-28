@@ -17,7 +17,6 @@ def generateNetwork(hier_graph):
     pvec = hier_graph.get_partition_at_level(0).pvec
     nc = [sum(pvec == i) for i in range(pvec.max() + 1)]
     A = sample_block_model(Omega, nc)
-    print("adjacency matrix sampled")
 
     return A 
 
