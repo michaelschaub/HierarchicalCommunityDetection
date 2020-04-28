@@ -195,7 +195,7 @@ class Partition(object):
         self.k = len(np.unique(pvec))
 
         H = sparse.coo_matrix((np.ones(nr_nodes), (np.arange(nr_nodes), pvec)),
-                       shape=(nr_nodes, self.k)).tocsr()
+                              shape=(nr_nodes, self.k)).tocsr()
         self.H = H
         self.Hnorm = preprocessing.normalize(H, axis=0, norm='l2')
 
@@ -208,7 +208,12 @@ class Partition(object):
         H = self.H
 
         # each block counts the number of half links / directed links
-        links_between_groups = (H.T @ A @ H).A
+        links_between_groups = (H.T @ A @ H)
+        # convert to dense matrix (if sparse, otherwise continue)
+        try:
+            links_between_groups = links_between_groups.A
+        except AttributeError:
+            pass
 
         # convert to array type first, before performing outer product
         nodes_per_group = np.ravel(H.sum(0))

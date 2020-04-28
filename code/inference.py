@@ -39,10 +39,9 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     list_candidates = n_groups
 
     partition = initial_partition
+    Eagg, Nagg = partition.count_links_between_groups(A)
+    Aagg = Eagg / Nagg
     while len(n_groups) > 0:
-
-        Eagg, Nagg = partition.count_links_between_groups(A)
-        Aagg = Eagg / Nagg
 
         if find_levels:
             partition_list, all_errors = identify_next_level(Aagg, n_groups,
@@ -66,7 +65,8 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
             #     Aagg, n_groups, model=model, reg=False)
 
         try:
-            hierarchy.add_level(partition_list[-1])
+            partition = partition_list[-1]
+            hierarchy.add_level(partition)
             # hierarchy.expand_partitions_to_full_graph()
             # partition = expand_partitions_to_full_graph(pvec)[-1]
 
@@ -90,6 +90,8 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
             if k == 1:
                 n_groups = []
 
+            Eagg, Nagg = partition.count_links_between_groups(Eagg)
+            Aagg = Eagg / Nagg
         # this exception occurs *no candidate* partition (selected == [])
         # and indicates that agglomeration has stopped
         except IndexError:
