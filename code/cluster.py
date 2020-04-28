@@ -103,7 +103,8 @@ class Hierarchy(list):
 
     # Question: it seems useful to have a constructor with a list of partitions/or an empty Hierarchy (no partition)?
     def __init__(self, partition):
-        self.add_level(partition)
+        assert type(partition) == Partition
+        self.append(partition)
         self.n = partition.pvec.size
         self.k = len(partition)
 
