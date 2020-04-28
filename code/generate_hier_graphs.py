@@ -3,7 +3,6 @@ import scipy
 import scipy.linalg
 import scipy.sparse
 import numpy as np
-import time
 from HierarchicalGraph import HierarchicalGraph
 
 from cluster import Hierarchy
@@ -17,11 +16,8 @@ def generateNetwork(hier_graph):
     Omega = hier_graph.Omega
     pvec = hier_graph.get_partition_at_level(0).pvec
     nc = [sum(pvec == i) for i in range(pvec.max() + 1)]
-    tic = time.perf_counter()
     A = sample_block_model(Omega, nc)
     print("adjacency matrix sampled")
-    toc = time.perf_counter()
-    print(f"Sample in {toc - tic:0.4f} seconds")
 
     return A 
 
