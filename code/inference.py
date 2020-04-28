@@ -165,10 +165,9 @@ def identify_next_level(A, n_groups, proj_norm='Fnew',
 
     """
     # first identify partitions and their projection error
-    # QUESTION: we never use the actual projection errors?
     mean_errors, partition_list = identify_partitions_and_errors(A, n_groups,
                                                                  [], proj_norm)
-    all_errors = np.zeros((len(n_groups), reps))
+    all_errors = np.zeros((len(n_groups), reps+1))
 
     # repeat with noise
     for kk in range(reps):
@@ -177,6 +176,8 @@ def identify_next_level(A, n_groups, proj_norm='Fnew',
                                                    partition_list, proj_norm)
         all_errors[:, kk] = errors
 
+    # include actual projection error in all_errors
+    all_errors[:, -1] = mean_errors
     return partition_list, all_errors
 
 
@@ -269,12 +270,8 @@ def find_smallest_relevant_minima(errors, expected_error, threshold=0.2):
     levels = np.intersect1d(levels, Ks[nonzero]).astype(int)
 
     Ks = np.arange(1, errors.size+1)
-    # print "Ks, local_min, below_thresh, levels"
-    # print Ks, Ks[local_min], Ks[below_thresh], Ks[levels]
     best_level = -1
     if levels.size > 0:
         best_level = levels[np.argmin(relerror[levels])]+1
-        # print "agglomeration level candidate"
-        # print best_level
 
     return best_level, below_thresh
