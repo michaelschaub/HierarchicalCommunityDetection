@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 import scipy
 import scipy.linalg
+import scipy.sparse
 import numpy as np
+import time
 from HierarchicalGraph import HierarchicalGraph
 
 from cluster import Hierarchy
@@ -15,8 +17,13 @@ def generateNetwork(hier_graph):
     Omega = hier_graph.Omega
     pvec = hier_graph.get_partition_at_level(0).pvec
     nc = [sum(pvec == i) for i in range(pvec.max() + 1)]
-    A = sample_block_model(Omega,nc)
-    return A
+    tic = time.perf_counter()
+    A = sample_block_model(Omega, nc)
+    print("adjacency matrix sampled")
+    toc = time.perf_counter()
+    print(f"Sample in {toc - tic:0.4f} seconds")
+
+    return A 
 
 def sample_block_model(omega, nc, mode = 'undirected'):
     """
@@ -33,43 +40,38 @@ def sample_block_model(omega, nc, mode = 'undirected'):
 
     ni, nj = omega.shape
 
+    nc = np.array(nc)
+    source_nodes = []
+    target_nodes = []
+    start_offset = np.concatenate(([0],nc.cumsum()[:-1]))
     # Question -- can we speed this up by collecting just the indices,
     # then creating a single sparse matrix at the end instead of concat
     if mode == 'undirected':
         if not np.all(omega.T == omega):
             raise Exception("You should provide a symmetric affinity matrix")
-        # rowlist is a list of matrices to stack vertically
-        rowlist = []
         for i in range(ni):
-            # collist is a list of matrices to stack horizontally
-            collist = []
-            for j in range(nj):
-                if i <= j:
-                    pij = omega[i,j]
-                else: 
-                    pij = 0
-                A1  = sample_from_block(nc[i],nc[j],pij)
+            for j in range(i,nj):
+                pij = omega[i,j]
+                A1 = (np.random.rand(nc[i], nc[j]) < pij).reshape((nc[i], nc[j]))
+                # A1  = sample_from_block(nc[i],nc[j],pij)
                 if i == j:
-                    A1 = scipy.sparse.triu(A1,k=1)
-                collist.append(A1)
-
-            A1 = scipy.sparse.hstack(collist)
-            rowlist.append(A1)
-
-            A = scipy.sparse.vstack(rowlist)
-        A = A + A.T
+                    A1 = np.triu(A1,k=1)
+                source, target = A1.nonzero()
+                source_nodes.append(source+start_offset[i])
+                target_nodes.append(target+start_offset[j])
+                # print(source)
+                # print(target)
+        source_nodes_temp = np.concatenate((source_nodes))
+        target_nodes_temp = np.concatenate((target_nodes))
+        source_nodes = np.concatenate((source_nodes_temp,target_nodes_temp))
+        target_nodes = np.concatenate((target_nodes_temp,source_nodes_temp))
+        A = scipy.sparse.coo_matrix( (np.ones(len(source_nodes)), (source_nodes,target_nodes) ), shape=(nc.sum(),nc.sum()) )
+        A = scipy.sparse.csr_matrix(A)
 
     elif mode != "undirected":
         raise NotImplementedError("sampling from asymmetric networks is not implemented yet")
 
     return A
-
-def sample_from_block(m,n,pij):
-    if pij == 0:
-        block = scipy.sparse.coo_matrix((m,n))
-    else:
-        block = (scipy.sparse.rand(m,n,density=pij,format="coo") >0)*1
-    return block
 
 
 ##################################
@@ -273,6 +275,7 @@ def matrix_fill_in_diag_block(diaA,B,same_diag=True):
 
 
 def createTiagoHierNetwork():
+    raise(NotImplementedError)
     a = 0.95
     b = 0.75
     c = 0.3
@@ -291,9 +294,10 @@ def createTiagoHierNetwork():
                         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
     Omega = Omega + Omega.T -np.diagflat(np.diag(Omega))
-    p1 = Partition(np.kron(np.array([0,0,0,0,0,0,1,1,1,1,1,1]),np.ones((nodes_per_group,),dtype=int)))
+    # below needs updating
+    p3 = Partition(np.kron(np.array([0,0,0,0,0,0,1,1,1,1,1,1]),np.ones((nodes_per_group,),dtype=int)))
     p2 = Partition(np.kron(np.array([0,0,0,1,1,1,2,2,2,3,3,3]),np.ones((nodes_per_group,),dtype=int)))
-    p3 = Partition(np.kron(np.arange(12,dtype=int),np.ones((nodes_per_group,),dtype=int)))
+    p1 = Partition(np.kron(np.arange(12,dtype=int),np.ones((nodes_per_group,),dtype=int)))
     Hier = Hierarchy(p1)
     Hier.add_level(p2)
     Hier.add_level(p3)
