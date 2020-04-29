@@ -103,7 +103,7 @@ class Hierarchy(list):
         self.n = len(partition.pvec)
 
     def add_level(self, partition):
-        assert type(partition) == Partition
+        assert issubclass(type(partition), Partition)
         self.append(partition)
 
     def expand_partitions_to_full_graph(self):
