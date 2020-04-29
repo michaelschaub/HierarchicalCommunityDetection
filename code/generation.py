@@ -25,14 +25,15 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
 
     dendro = HierarchicalGraph()
     omega = []
-    partitions = []
     n_this_level = n
+    num_current_groups = 1
     for level in range(1, n_levels):
         print("Hierarchy Level: ", level)
         # calculate omega for this level
         omega = calculate2paramOmega(n_this_level, snr, c_bar,
                                      groups_per_level)
-
+        # create omega_map (each group in the previous level has an omega)
+        omega_map = dict((i, 0) for i in range(num_current_groups))
         # update n and c_bar
         cin = omega[0, 0]*n_this_level
         n_this_level = n_this_level / groups_per_level
@@ -45,34 +46,22 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
         num_current_groups = groups_per_level**(level)
         pvec = np.kron(np.arange(num_current_groups, dtype=int),
                        np.ones(int(groups_per_level), dtype=int))
-        part = PlantedPartition(pvec, omega)
+        part = PlantedPartition(pvec, [omega], omega_map)
         dendro.add_level(part)
 
     # complete finest level
     print("Hierarchy Level: ", n_levels)
-    num_current_groups = groups_per_level**(n_levels)
     omega = calculate2paramOmega(n_this_level, snr, c_bar,
                                  groups_per_level)
+    # create omega_map (each group in the previous level has an omega)
+    omega_map = dict((i, 0) for i in range(num_current_groups))
+    num_current_groups = groups_per_level**(n_levels)
     pvec = np.kron(np.arange(num_current_groups, dtype=int),
                    np.ones(int(n/num_current_groups), dtype=int))
-    part = PlantedPartition(pvec, omega)
+    part = PlantedPartition(pvec, [omega], omega_map)
     dendro.add_level(part)
-    partitions = partitions[::-1]
 
     return dendro
-    # matrix = omega[0]
-    # for level in range(n_levels-1):
-    #     Omega = matrix_fill_in_diag_block(omega[level+1],matrix)
-    #     matrix = Omega
-    #
-    # # Q: should we adjust the Hierarchy constructors to make this less cumbersome
-    # Hier = Hierarchy(Partition(partitions.pop(0)))
-    # for pvec in partitions:
-    #     Hier.add_level(Partition(pvec))
-    #
-    # graph = HierarchicalGraph(Hier, Omega)
-
-    # return graph
 
 
 class HierarchicalGraph(Hierarchy):
@@ -93,18 +82,32 @@ class HierarchicalGraph(Hierarchy):
         # calculate total number of nodes
         self.n = self[0].group_size.sum()
 
-    def sample_edges_in_block(self, level, i, j):
+        # calculate group sizes by branch
+        self.tree_dict = {}
+        self.tree_dict[0] = {0: np.arange(self[0].k)}
+        for level in range(1, len(self)):
+            self.tree_dict[level] = {}
+            for b in range(self[level-1].k):
+                self.tree_dict[level][b], _ = np.nonzero(self[level-1].H[:, b])
+
+    def sample_edges_in_block(self, level, branch, i, j):
         partition = self[level]
-        omega = partition.omega
+        tree_dict = self.tree_dict
+        omega_idx = partition.omega_map[branch]
+        omega = partition.omega_list[omega_idx]
         gs = partition.group_size
         rg = np.random.default_rng()
 
         pij = omega[i, j]
-        gsi = gs[i]
-        gsj = gs[j]
+        groups = self.tree_dict[level][branch]
+        truei = groups[i]
+        truej = groups[j]
+        gsi = gs[truei]
+        gsj = gs[truej]
         n_nodes = gsi*gsj
-        offseti = gs[:i].sum()
-        offsetj = gs[:j].sum()
+        offseti = gs[:tree_dict[level][branch][i]].sum()
+        offsetj = gs[:tree_dict[level][branch][j]].sum()
+
         # sample number of edges
         n_edges = rg.binomial(n_nodes, pij)
         # sample which edges in the block
@@ -113,35 +116,36 @@ class HierarchicalGraph(Hierarchy):
         target_nodes = [offsetj + (ei % gsi) for ei in edge_idx]
         return source_nodes, target_nodes
 
-    def sample_edges_at_level(self, level):
+    def sample_edges_at_level(self, level, branch):
         source_nodes = []
         target_nodes = []
         try:
-            partition = self[level]
-            n_groups = len(partition.omega)
+            # KeyError will be raised here if lowest level has been reached
+            groups = self.tree_dict[level][branch]
+            n_groups = len(groups)
             for i, j in zip(*np.triu_indices(n_groups, 1)):
-                tmp_s, tmp_t = self.sample_edges_in_block(level, i, j)
+                tmp_s, tmp_t = self.sample_edges_in_block(level, branch, i, j)
                 source_nodes.extend(tmp_s)
                 target_nodes.extend(tmp_t)
 
-            partition = self[level]
-            gs = partition.group_size
-
-            for i in range(n_groups):
-                offseti = gs[:i].sum()
+            for i in range(len(groups)):
                 try:
-                    tmp_s, tmp_t = self.sample_edges_at_level(level+1)
-                    source_nodes.extend([s+offseti for s in tmp_s])
-                    target_nodes.extend([t+offseti for t in tmp_t])
+                    tmp_s, tmp_t = self.sample_edges_at_level(level+1,
+                                                              groups[i])
+                    source_nodes.extend(tmp_s)
+                    target_nodes.extend(tmp_t)
+
                 except RecursionLimitError:
-                    tmp_s, tmp_t = self.sample_edges_in_block(level, i, i)
+                    tmp_s, tmp_t = self.sample_edges_in_block(level, branch,
+                                                              i, i)
+                    # remove 'lower triangle' because undirected
                     tmp_s, tmp_t = zip(*[(s, t) for s, t in zip(tmp_s, tmp_t)
                                        if t > s])
                     source_nodes.extend(tmp_s)
                     target_nodes.extend(tmp_t)
 
         # end of recursion
-        except IndexError:
+        except KeyError:
             raise RecursionLimitError('recursion end')
 
         return source_nodes, target_nodes
@@ -149,7 +153,7 @@ class HierarchicalGraph(Hierarchy):
     def sample_network(self):
         self.calc_nodes_per_level()
         n = self.n
-        source_nodes, target_nodes = self.sample_edges_at_level(0)
+        source_nodes, target_nodes = self.sample_edges_at_level(0, 0)
 
         A = sparse.coo_matrix((np.ones(len(source_nodes)),
                               (source_nodes, target_nodes)),
@@ -161,13 +165,13 @@ class HierarchicalGraph(Hierarchy):
 
 class PlantedPartition(Partition):
 
-    def __init__(self, pvec, omega):
+    def __init__(self, pvec, omega_list, omega_map):
         self.pvec = pvec
-        self.omega = omega
+        self.omega_list = omega_list
+        self.omega_map = omega_map
         self.relabel_partition_vec()
         self.create_partition_matrix()
         self.nc = np.asarray(self.H.sum(0).astype(int))
-        # self.nc = np.array([sum(self.pvec == i) for i in range(len(self))])
 
 
 def calculate2paramOmega(n, snr, c_bar, groups_per_level):
