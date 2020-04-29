@@ -91,51 +91,76 @@ class HierarchicalGraph(Hierarchy):
                 self.tree_dict[level][b], _ = np.nonzero(self[level-1].H[:, b])
 
     def sample_edges_in_block(self, level, branch, i, j):
+        """
+        Sample edges within a specified block.
+        level :  level in the dendrogram
+        branch : branch number at level
+        i, j : block indices (relative to branch)
+        """
+        # get local variables: partition, omega etc.
         partition = self[level]
         tree_dict = self.tree_dict
         omega_idx = partition.omega_map[branch]
         omega = partition.omega_list[omega_idx]
         gs = partition.group_size
+
+        # initialise random number generator
         rg = np.random.default_rng()
 
         pij = omega[i, j]
         groups = self.tree_dict[level][branch]
+        # get true block indices for the level (i and j are relative to branch)
         truei = groups[i]
         truej = groups[j]
+        # get no of nodes of both groups
         gsi = gs[truei]
         gsj = gs[truej]
-        n_nodes = gsi*gsj
+        # possible number of edges
+        block_size = gsi*gsj
+        # calculate global offsets
         offseti = gs[:tree_dict[level][branch][i]].sum()
         offsetj = gs[:tree_dict[level][branch][j]].sum()
 
         # sample number of edges
-        n_edges = rg.binomial(n_nodes, pij)
+        n_edges = rg.binomial(block_size, pij)
         # sample which edges in the block
-        edge_idx = rg.choice(n_nodes, n_edges, replace=False)
+        edge_idx = rg.choice(block_size, n_edges, replace=False)
         source_nodes = [offseti + (ei // gsi) for ei in edge_idx]
         target_nodes = [offsetj + (ei % gsi) for ei in edge_idx]
         return source_nodes, target_nodes
 
     def sample_edges_at_level(self, level, branch):
+        """
+        Sample edges starting at a given level (and branch).
+        Recursive function to traverse all nodes in the hierarchy below
+        specifies level and branch.
+        """
+        # initialise lists for source and target nodes.
         source_nodes = []
         target_nodes = []
+
         try:
             # KeyError will be raised here if lowest level has been reached
             groups = self.tree_dict[level][branch]
             n_groups = len(groups)
+            # first sample edges in the off-diagonal blocks at current level
             for i, j in zip(*np.triu_indices(n_groups, 1)):
                 tmp_s, tmp_t = self.sample_edges_in_block(level, branch, i, j)
                 source_nodes.extend(tmp_s)
                 target_nodes.extend(tmp_t)
 
+            # sample edges in the diagonal blocks
             for i in range(len(groups)):
                 try:
+                    # try to go deeper
                     tmp_s, tmp_t = self.sample_edges_at_level(level+1,
                                                               groups[i])
                     source_nodes.extend(tmp_s)
                     target_nodes.extend(tmp_t)
 
                 except RecursionLimitError:
+                    # when final depth reached sample edges using the diagonal
+                    # of omega at the current branch
                     tmp_s, tmp_t = self.sample_edges_in_block(level, branch,
                                                               i, i)
                     # remove 'lower triangle' because undirected
@@ -151,6 +176,11 @@ class HierarchicalGraph(Hierarchy):
         return source_nodes, target_nodes
 
     def sample_network(self):
+        """
+        Sample a network.
+        Samples an undirected network from the Planted Partitions in the
+        hierarchy. Currently assumes hierarchy is simple assortative.
+        """
         self.calc_nodes_per_level()
         n = self.n
         source_nodes, target_nodes = self.sample_edges_at_level(0, 0)
