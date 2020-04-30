@@ -243,7 +243,7 @@ class Partition(object):
         Compute the number of possible and actual links between the groups
         indicated in the partition vector.
         """
-        print('WARNING: Do not use partition function')
+        print('WARNING: This message should only appear once')
         H = self.H
 
         # each block counts the number of half links / directed links

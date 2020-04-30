@@ -78,16 +78,6 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
 
             Eagg, Nagg = hierarchy.count_links_between_groups(Eagg)
             Aagg = Eagg / Nagg
-            if Aagg.size > np.isfinite(Aagg).sum():
-                print('HERE')
-                print(Aagg.size, np.isfinite(Aagg).sum())
-                print(Aagg)
-                print(Eagg)
-                print(Nagg)
-                nn = np.ravel(partition.H.sum(0))
-                print(nn)
-                print(np.outer(nn, nn))
-                print('END')
         # this exception occurs *no candidate* partition (selected == [])
         # and indicates that agglomeration has stopped
         except IndexError:
@@ -191,10 +181,6 @@ def identify_partitions_and_errors(A, n_groups,
     L = Laplacian(A)
 
     # get eigenvectors
-    if L.operator.size > np.isfinite(L.operator).sum():
-        print(L.operator.size, np.isfinite(L.operator).sum())
-        print(L.operator)
-        print(L.A)
     L.find_k_eigenvectors(max_k, which='SM')
 
     # initialise errors
