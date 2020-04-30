@@ -24,7 +24,6 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
     """
 
     dendro = HierarchicalGraph()
-    omega = []
     n_this_level = n
     num_current_groups = 1
     for level in range(1, n_levels):
@@ -42,7 +41,6 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
 
         c_bar = (cin/n_this_level)*(n_this_level / groups_per_level)
 
-    # for level in range(1, n_levels):
         num_current_groups = groups_per_level**(level)
         pvec = np.kron(np.arange(num_current_groups, dtype=int),
                        np.ones(int(groups_per_level), dtype=int))
@@ -59,6 +57,68 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
     pvec = np.kron(np.arange(num_current_groups, dtype=int),
                    np.ones(int(n/num_current_groups), dtype=int))
     part = PlantedPartition(pvec, [omega], omega_map)
+    dendro.add_level(part)
+
+    return dendro
+
+
+def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
+    """
+    Function to create an asymmetric test GHRG for simulations
+    Parameters:
+        n   : number of nodes
+        snr : signal to noise ratio (1 represents theoretical detectability threshold)
+        c_bar : average degree
+        n_levels    : depth of GHRG
+        groups_per_level     : number of groups at each level
+    """
+
+    dendro = HierarchicalGraph()
+    n_this_level = n
+    num_current_groups = 1
+    pvec_final = np.zeros(n)
+    for level in range(1, n_levels):
+        print("Hierarchy Level: ", level)
+        # calculate omega for this level
+        omega = calculate2paramOmega(n_this_level, snr, c_bar,
+                                     groups_per_level)
+        # create omega_map (each group in the previous level has an omega)
+        omega_map = {num_current_groups-1: 0}
+        # update pvec_final
+        new_groups = np.arange(groups_per_level, dtype=int) + pvec_final[-1]
+        n_each_group = int(n_this_level/groups_per_level)
+        pvec_final[-n_this_level:] = np.kron(new_groups,
+                                             np.ones(n_each_group, dtype=int))
+        # update n and c_bar
+        cin = omega[0, 0]*n_this_level
+        n_this_level = int(n_this_level / groups_per_level)
+        if n_this_level % groups_per_level > 0:
+            print("Rounding number of nodes")
+
+        c_bar = (cin/n_this_level)*(n_this_level / groups_per_level)
+
+        # update number of current groups
+        num_current_groups += groups_per_level-1
+        print(num_current_groups, num_current_groups + groups_per_level-1)
+        # initialise pvec
+        pvec = np.empty(num_current_groups + groups_per_level-1)
+        pvec[:num_current_groups] = np.arange(num_current_groups)
+        pvec[num_current_groups:] = num_current_groups-1
+
+        part = PlantedPartition(pvec, [omega], omega_map)
+        dendro.add_level(part)
+
+    # complete finest level
+    print("Hierarchy Level: ", n_levels)
+    omega = calculate2paramOmega(n_this_level, snr, c_bar,
+                                 groups_per_level)
+    omega_map = {num_current_groups-1: 0}
+    # update pvec_final
+    new_groups = np.arange(groups_per_level, dtype=int) + pvec_final[-1]
+    n_each_group = int(n_this_level/groups_per_level)
+    pvec_final[-n_this_level:] = np.kron(new_groups,
+                                         np.ones(n_each_group, dtype=int))
+    part = PlantedPartition(pvec_final, [omega], omega_map)
     dendro.add_level(part)
 
     return dendro
