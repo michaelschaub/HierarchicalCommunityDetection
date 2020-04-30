@@ -58,6 +58,7 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
                    np.ones(int(n/num_current_groups), dtype=int))
     part = PlantedPartition(pvec, [omega], omega_map)
     dendro.add_level(part)
+    dendro.expand_partitions_to_full_graph()
 
     return dendro
 
@@ -120,6 +121,7 @@ def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
                                          np.ones(n_each_group, dtype=int))
     part = PlantedPartition(pvec_final, [omega], omega_map)
     dendro.add_level(part)
+    dendro.expand_partitions_to_full_graph()
 
     return dendro
 
@@ -128,6 +130,22 @@ class HierarchicalGraph(Hierarchy):
 
     def __init__(self):
         pass
+
+    def expand_partitions_to_full_graph(self):
+        """
+        Map list of aggregated partition vectors in heirarchy to list of
+        full-sized partition vectors
+        """
+        # the finest partition is already at the required size
+        self[-1].pvec_expanded = self[-1].pvec
+
+        # loop over all other partition
+        for p0, partition in zip(self[:0:-1], self[-2::-1]):
+            # group indices of previous level correspond to nodes in the
+            # aggregated graph;
+            # get the group ids of those nodes, and expand by reading out one
+            # index per previous node
+            partition.pvec_expanded = partition.pvec[p0.pvec_expanded]
 
     def calc_nodes_per_level(self):
         # calculate group sizes at coarsest level
