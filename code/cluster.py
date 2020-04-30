@@ -122,6 +122,45 @@ class Hierarchy(list):
             # index per previous node
             partition.pvec_expanded = partition.pvec[p0.pvec_expanded]
 
+    def count_links_between_groups(self, A, partition_idx=-1, directed=True,
+                                   self_loops=False):
+        """
+        Compute the number of possible and actual links between the groups
+        indicated in the partition vector.
+        """
+        partition = self[partition_idx]
+        H = partition.H
+        lastH = self[0].H
+        for partition in self[1:partition_idx]:
+            lastH = lastH @ partition.H
+        lastH = lastH @ H
+        nodes_per_group = np.ravel(lastH.sum(0))
+
+        # each block counts the number of half links / directed links
+        links_between_groups = (H.T @ A @ H)
+        # convert to dense matrix (if sparse, otherwise continue)
+        try:
+            links_between_groups = links_between_groups.A
+        except AttributeError:
+            pass
+
+        # convert to array type first, before performing outer product
+        possible_links = np.outer(nodes_per_group, nodes_per_group)
+
+        # if we do not allow self-loops this needs adjustment.
+        if not self_loops:
+            possible_links = possible_links - np.diag(nodes_per_group)
+
+        if not directed:
+            # we need to scale diagonal only by factor 2
+            links_between_groups -= np.diag(np.diag(links_between_groups)) / 2
+            links_between_groups = np.triu(links_between_groups)
+
+            possible_links -= np.diag(np.diag(possible_links)) / 2
+            possible_links = np.triu(possible_links)
+
+        return links_between_groups, possible_links
+
 
 class Partition(object):
     """
@@ -204,7 +243,7 @@ class Partition(object):
         Compute the number of possible and actual links between the groups
         indicated in the partition vector.
         """
-
+        print('WARNING: Do not use partition function')
         H = self.H
 
         # each block counts the number of half links / directed links

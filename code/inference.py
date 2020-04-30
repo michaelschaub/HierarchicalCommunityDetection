@@ -42,7 +42,7 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     Eagg, Nagg = partition.count_links_between_groups(A)
     Aagg = Eagg / Nagg
     while len(n_groups) > 0:
-
+        print([p.k for p in hierarchy])
         if find_levels:
             partition_list, all_errors = identify_next_level(Aagg, n_groups,
                                                              proj_norm='Fnew',
@@ -60,15 +60,10 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
 
         else:
             raise NotImplementedError('Using specified levels not implemented')
-            # k = n_groups[-1]
-            # n_groups, hier_partition_vecs = identify_partitions_at_level(
-            #     Aagg, n_groups, model=model, reg=False)
 
         try:
             partition = partition_list[-1]
             hierarchy.add_level(partition)
-            # hierarchy.expand_partitions_to_full_graph()
-            # partition = expand_partitions_to_full_graph(pvec)[-1]
 
             if find_levels:
                 # QUESTION: do we use ind_levels_across_agg ?
@@ -76,22 +71,23 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
                 k = hierarchy[-1].k
                 n_groups = np.arange(1, k+1)
                 list_candidates = n_groups
-                # else:
-                #     raise NotImplementedError('''Appears not to be used; not
-                #                                  implemented yet''')
-                # it can be useful to pass down candidates
-                # from previous agglomeration rounds here instead of starting from scratch!
-                    # list_candidates = below_thresh + 1
-                    # # print "updated list"
-                    # # print list_candidates
-                    # k = np.max(n_groups)
-                    # n_groups = np.arange(1, k+1)
+
             # if levels are not prespecified, reset candidates
             if k == 1:
                 n_groups = []
 
-            Eagg, Nagg = partition.count_links_between_groups(Eagg)
+            Eagg, Nagg = hierarchy.count_links_between_groups(Eagg)
             Aagg = Eagg / Nagg
+            if Aagg.size > np.isfinite(Aagg).sum():
+                print('HERE')
+                print(Aagg.size, np.isfinite(Aagg).sum())
+                print(Aagg)
+                print(Eagg)
+                print(Nagg)
+                nn = np.ravel(partition.H.sum(0))
+                print(nn)
+                print(np.outer(nn, nn))
+                print('END')
         # this exception occurs *no candidate* partition (selected == [])
         # and indicates that agglomeration has stopped
         except IndexError:
@@ -195,6 +191,10 @@ def identify_partitions_and_errors(A, n_groups,
     L = Laplacian(A)
 
     # get eigenvectors
+    if L.operator.size > np.isfinite(L.operator).sum():
+        print(L.operator.size, np.isfinite(L.operator).sum())
+        print(L.operator)
+        print(L.A)
     L.find_k_eigenvectors(max_k, which='SM')
 
     # initialise errors
