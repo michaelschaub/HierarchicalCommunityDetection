@@ -6,6 +6,7 @@ The module contains:
 
 """
 import numpy as np
+from scipy.linalg import eigh
 from scipy.sparse.linalg import eigsh
 from scipy.sparse import eye, diags, issparse, csr_matrix
 
@@ -14,7 +15,10 @@ class SpectralOperator(object):
 
     def find_k_eigenvectors(self, K, which='SA'):
         M = self.operator
-        evals, evecs = eigsh(M, K, which=which)
+        if K < M.shape[0]:
+            evals, evecs = eigsh(M, K, which=which)
+        else:
+            evals, evecs = eigsh(M, M.shape[0]-1, which=which)
         if which == 'SA':
             index = np.argsort(evals)
         elif which == 'SM':
