@@ -15,6 +15,8 @@ def setup_parameters():
     parameters = {}
     parameters['reps'] = 10
     parameters['noise'] = 2e-2
+    parameters['BHnorm'] = False
+    parameters['Lnorm'] = True
     return parameters
 
 
@@ -23,13 +25,16 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     # get parameters
     reps = parameters['reps']
     noise = parameters['noise']
+    Lnorm = parameters['Lnorm']
+    BHnorm = parameters['BHnorm']
 
     # STEP 1: find inital partition
     if n_groups is None:
         K = -1
 
     initial_partition = cluster_with_BetheHessian(A, num_groups=K,
-                                                  regularizer="BHa")
+                                                  regularizer="BHa",
+                                                  norm=BHnorm)
     find_levels = False
     if n_groups is None:
         n_groups = np.arange(1, initial_partition.k+1)
@@ -47,7 +52,8 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
             partition_list, all_errors = identify_next_level(Aagg, n_groups,
                                                              proj_norm='Fnew',
                                                              reps=reps,
-                                                             noise=noise)
+                                                             noise=noise,
+                                                             norm=Lnorm)
             max_errors = np.max(all_errors, axis=1)
             levels, below_thresh = find_relevant_minima(max_errors)
             selected = np.intersect1d(levels, list_candidates)
@@ -88,7 +94,7 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
 
 
 def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
-                              clustermode='KM'):
+                              clustermode='KM', norm=False):
     """
     Perform one round of spectral clustering using the Bethe Hessian
     """
@@ -129,13 +135,13 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
         combined_evecs = combined_evecs[:, index[:num_groups]]
 
     part = cluster.find_partition(combined_evecs, num_groups,
-                                  method=clustermode, normalization=False)
+                                  method=clustermode, normalization=norm)
 
     return part
 
 
 def identify_next_level(A, n_groups, proj_norm='Fnew',
-                        reps=20, noise=2e-2):
+                        reps=20, noise=2e-2, norm=True):
     """
     Identify agglomeration levels by checking the projection errors and
     comparing the to a perturbed verstion of the same network
@@ -154,14 +160,16 @@ def identify_next_level(A, n_groups, proj_norm='Fnew',
     """
     # first identify partitions and their projection error
     mean_errors, partition_list = identify_partitions_and_errors(A, n_groups,
-                                                                 [], proj_norm)
+                                                                 [], proj_norm,
+                                                                 norm=norm)
     all_errors = np.zeros((len(n_groups), reps+1))
 
     # repeat with noise
     for kk in range(reps):
         Anew = cluster.add_noise_to_small_matrix(A, snr=noise)
         errors, _ = identify_partitions_and_errors(Anew, n_groups,
-                                                   partition_list, proj_norm)
+                                                   partition_list, proj_norm,
+                                                   norm=norm)
         all_errors[:, kk] = errors
 
     # include actual projection error in all_errors
@@ -171,7 +179,8 @@ def identify_next_level(A, n_groups, proj_norm='Fnew',
 
 def identify_partitions_and_errors(A, n_groups,
                                    partition_list,
-                                   proj_norm='Fnew'):
+                                   proj_norm='Fnew',
+                                   norm=True):
     """
     Collect the partitions and projection errors found for a list n_groups of
     'putative' group numbers
@@ -189,7 +198,7 @@ def identify_partitions_and_errors(A, n_groups,
     if partition_list == []:
         # find partitions and their error for each k
         for k in n_groups:
-            partition = cluster.find_partition(L.evecs, k)
+            partition = cluster.find_partition(L.evecs, k, normalization=norm)
             partition_list.append(partition)
 
     for ki, partition in enumerate(partition_list):
