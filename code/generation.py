@@ -100,7 +100,7 @@ def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
 
         # update number of current groups
         num_current_groups += groups_per_level-1
-        print(num_current_groups, num_current_groups + groups_per_level-1)
+        # print(num_current_groups, num_current_groups + groups_per_level-1)
         # initialise pvec
         pvec = np.empty(num_current_groups + groups_per_level-1)
         pvec[:num_current_groups] = np.arange(num_current_groups)
