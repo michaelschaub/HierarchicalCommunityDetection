@@ -9,15 +9,17 @@ from sklearn import preprocessing
 from sklearn import mixture
 from scipy import sparse
 from scipy import linalg
-import error_handling
+# import error_handling
 
 
-def find_partition(evecs, k, method='KM', n_init=20):
+def find_partition(evecs, k, method='KM', n_init=20, normalization=True):
     """Perform different types of clustering in spectral embedding space."""
     V = evecs[:, :k]
 
-    X = preprocessing.normalize(V, axis=1, norm='l2')
-
+    if normalization:
+        X = preprocessing.normalize(V, axis=1, norm='l2')
+    else:
+        X = V
     # select methof of clustering - QR, KM (k-means), or GMM
     if method == 'QR':
         partition_vec = clusterEVwithQR(X)

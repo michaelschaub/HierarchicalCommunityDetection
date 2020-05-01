@@ -129,7 +129,7 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
         combined_evecs = combined_evecs[:, index[:num_groups]]
 
     part = cluster.find_partition(combined_evecs, num_groups,
-                                  method=clustermode)
+                                  method=clustermode, normalization=False)
 
     return part
 
