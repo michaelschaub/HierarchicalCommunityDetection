@@ -17,6 +17,7 @@ def setup_parameters():
     parameters['noise'] = 2e-2
     parameters['BHnorm'] = False
     parameters['Lnorm'] = True
+    parameters['error_threshold'] = 0.2
     return parameters
 
 
@@ -27,6 +28,7 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     noise = parameters['noise']
     Lnorm = parameters['Lnorm']
     BHnorm = parameters['BHnorm']
+    error_threshold = parameters['error_threshold']
 
     # STEP 1: find inital partition
     if n_groups is None:
@@ -55,7 +57,8 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
                                                              noise=noise,
                                                              norm=Lnorm)
             max_errors = np.max(all_errors, axis=1)
-            levels, below_thresh = find_relevant_minima(max_errors)
+            levels, below_thresh = find_relevant_minima(max_errors,
+                                                        error_threshold)
             selected = np.intersect1d(levels, list_candidates)
 
             selected = selected[:-1]
@@ -208,18 +211,20 @@ def identify_partitions_and_errors(A, n_groups,
     return error, partition_list
 
 
-def find_relevant_minima(errors):
+def find_relevant_minima(errors, threshold):
     """Given a set of error and standard deviations, find best minima"""
 
     levels = [1, errors.size]
     expected_error = expected_errors_random_projection(levels)
     next_level, below_thresh = find_smallest_relevant_minima(errors,
-                                                             expected_error)
+                                                             expected_error,
+                                                             threshold)
     while next_level != -1:
         levels = levels + [next_level]
         levels.sort()
         expected_error = expected_errors_random_projection(levels)
-        next_level, _ = find_smallest_relevant_minima(errors, expected_error)
+        next_level, _ = find_smallest_relevant_minima(errors, expected_error,
+                                                      threshold)
 
     # QUESTION: why might we have zero here?
     # remove again the level 1 entry
