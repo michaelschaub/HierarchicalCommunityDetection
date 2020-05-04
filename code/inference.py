@@ -57,7 +57,7 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
                                                              noise=noise,
                                                              norm=Lnorm)
             max_errors = np.max(all_errors, axis=1)
-            levels, below_thresh = find_relevant_minima(max_errors,
+            levels = find_relevant_minima(max_errors, n_groups,
                                                         error_threshold)
             selected = np.intersect1d(levels, list_candidates)
 
@@ -211,27 +211,42 @@ def identify_partitions_and_errors(A, n_groups,
     return error, partition_list
 
 
-def find_relevant_minima(errors, threshold):
+def find_relevant_minima(errors, n_groups, threshold):
     """Given a set of error and standard deviations, find best minima"""
 
     levels = [1, errors.size]
-    expected_error = expected_errors_random_projection(levels)
-    next_level, below_thresh = find_smallest_relevant_minima(errors,
-                                                             expected_error,
-                                                             threshold)
-    while next_level != -1:
-        levels = levels + [next_level]
-        levels.sort()
-        expected_error = expected_errors_random_projection(levels)
-        next_level, _ = find_smallest_relevant_minima(errors, expected_error,
-                                                      threshold)
+
+    total_err = np.empty(len(errors))
+    k_new = 2
+    while k_new > 1:
+        for ki, k in enumerate(n_groups):
+
+            levels_i = levels + [k]
+            levels_i.sort()
+            expected_errors = expected_errors_random_projection(levels_i)
+            total_err[ki] = np.sum((errors - expected_errors) ** 2)
+
+        k_new = n_groups[np.argmin(total_err)]
+        print('Found level', k_new)
+        levels.append(k_new)
+
+    # expected_error = expected_errors_random_projection(levels)
+    # next_level, below_thresh = find_smallest_relevant_minima(errors,
+    #                                                          expected_error,
+    #                                                          threshold)
+    # while next_level != -1:
+    #     levels = levels + [next_level]
+    #     levels.sort()
+    #     expected_error = expected_errors_random_projection(levels)
+    #     next_level, _ = find_smallest_relevant_minima(errors, expected_error,
+    #                                                   threshold)
 
     # QUESTION: why might we have zero here?
     # remove again the level 1 entry
     if levels[0] == 1:
         levels = levels[1:]
 
-    return np.array(levels), below_thresh
+    return np.array(levels)
 
 
 def expected_errors_random_projection(levels):
