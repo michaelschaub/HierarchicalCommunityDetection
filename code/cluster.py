@@ -244,8 +244,10 @@ class Partition(object):
         """
         Compute the number of possible and actual links between the groups
         indicated in the partition vector.
+        NOTE: This function should only be used if A is the full adjacency
+        matrix, otherwise possible_links will be calculated incorrectly.
         """
-        print('WARNING: This message should only appear once')
+        # print('WARNING: This message should only appear once')
         H = self.H
 
         # each block counts the number of half links / directed links

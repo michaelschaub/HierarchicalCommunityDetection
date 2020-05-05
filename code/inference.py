@@ -17,18 +17,16 @@ def setup_parameters():
     parameters['noise'] = 2e-2
     parameters['BHnorm'] = False
     parameters['Lnorm'] = True
-    parameters['error_threshold'] = 0.2
     return parameters
 
 
 def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
-
+    print('START')
     # get parameters
     reps = parameters['reps']
     noise = parameters['noise']
     Lnorm = parameters['Lnorm']
     BHnorm = parameters['BHnorm']
-    error_threshold = parameters['error_threshold']
 
     # STEP 1: find inital partition
     if n_groups is None:
@@ -43,12 +41,13 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
         find_levels = True
 
     hierarchy = cluster.Hierarchy(initial_partition)
-    list_candidates = n_groups
+    # list_candidates = n_groups
 
     partition = initial_partition
     Eagg, Nagg = partition.count_links_between_groups(A)
     Aagg = Eagg / Nagg
-    while len(n_groups) > 0:
+    selected = np.inf
+    while selected > 1:
         print([p.k for p in hierarchy])
         if find_levels:
             partition_list, all_errors = identify_next_level(Aagg, n_groups,
@@ -57,21 +56,21 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
                                                              noise=noise,
                                                              norm=Lnorm)
             max_errors = np.max(all_errors, axis=1)
-            levels = find_relevant_minima(max_errors, n_groups,
-                                                        error_threshold)
-            selected = np.intersect1d(levels, list_candidates)
-
-            selected = selected[:-1]
-            n_groups = n_groups[selected]
+            selected = find_relevant_minima(max_errors, n_groups)
+            # selected = np.intersect1d(levels, list_candidates)
+            # print(selected, 's')
+            # selected = selected[:-1]
+            # n_groups = n_groups[selected]
             # discard partitions that we don't need
-            partition_list = [partition for partition in partition_list
-                              if partition.k in selected]
+            partition = [partition for partition in partition_list
+                         if partition.k == selected][0]
 
         else:
             raise NotImplementedError('Using specified levels not implemented')
 
-        try:
-            partition = partition_list[-1]
+        if selected > 1:
+            # partition = partition_list[0]
+            # print(partition.k, 'newk')
             hierarchy.add_level(partition)
 
             if find_levels:
@@ -79,18 +78,14 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
                 # if ind_levels_across_agg:
                 k = hierarchy[-1].k
                 n_groups = np.arange(1, k+1)
-                list_candidates = n_groups
-
-            # if levels are not prespecified, reset candidates
-            if k == 1:
-                n_groups = []
+                # list_candidates = n_groups
 
             Eagg, Nagg = hierarchy.count_links_between_groups(Eagg)
             Aagg = Eagg / Nagg
         # this exception occurs *no candidate* partition (selected == [])
         # and indicates that agglomeration has stopped
-        except IndexError:
-            print("selected == [] ", selected)
+        # except IndexError:
+        #     print("selected == [] ", selected)
 
     hierarchy.expand_partitions_to_full_graph()
     return hierarchy
@@ -211,42 +206,63 @@ def identify_partitions_and_errors(A, n_groups,
     return error, partition_list
 
 
-def find_relevant_minima(errors, n_groups, threshold):
+def find_relevant_minima(errors, n_groups):
     """Given a set of error and standard deviations, find best minima"""
 
     levels = [1, errors.size]
-
+    # levels_in_order = []
+    expected_errors = expected_errors_random_projection(levels)
+    rel_error = errors/expected_errors
     total_err = np.empty(len(errors))
-    k_new = 2
-    while k_new > 1:
-        for ki, k in enumerate(n_groups):
+    for ki, k in enumerate(n_groups):
 
-            levels_i = levels + [k]
-            levels_i.sort()
-            expected_errors = expected_errors_random_projection(levels_i)
-            total_err[ki] = np.sum((errors - expected_errors) ** 2)
+        levels_i = levels + [k]
+        levels_i.sort()
+        expected_errors = expected_errors_random_projection(levels_i)
+        total_err[ki] = np.sqrt(np.sum((errors - expected_errors) ** 2))
 
-        k_new = n_groups[np.argmin(total_err)]
-        print('Found level', k_new)
-        levels.append(k_new)
+    total_err *= rel_error
+    total_err[np.isnan(total_err)] = np.inf
+    candidates = n_groups[total_err < 0.5]
+    if len(candidates) > 0:
+        k_new = np.max(candidates)
+        print('candidates', candidates)
+        print('Found level', k_new, np.min(total_err))
+        return k_new
+        # print(total_err)
+        # k_next = k_new
+    # while k_next > 1: # use this loop to calculate all possible levels
+    # for ki, k in enumerate(n_groups):
+    #
+    #     levels_i = levels + [k]
+    #     levels_i.sort()
+    #     expected_errors = expected_errors_random_projection(levels_i)
+        # total_err[ki] = np.sum((errors - expected_errors) ** 2)
+        # idx = np.ones(len(errors)+1, dtype=bool)
+        # idx[levels_i] = False
+        # idx = idx[1:]
+        # total_err[ki] = np.sum(((errors[idx] - expected_errors[idx])/expected_errors[idx]) ** 2)
+        # total_err[ki] = np.sqrt(np.sum((errors - expected_errors) ** 2))
 
-    # expected_error = expected_errors_random_projection(levels)
-    # next_level, below_thresh = find_smallest_relevant_minima(errors,
-    #                                                          expected_error,
-    #                                                          threshold)
-    # while next_level != -1:
-    #     levels = levels + [next_level]
-    #     levels.sort()
-    #     expected_error = expected_errors_random_projection(levels)
-    #     next_level, _ = find_smallest_relevant_minima(errors, expected_error,
-    #                                                   threshold)
+    # levels.sort()
+    # expected_errors = expected_errors_random_projection(levels)
+    # eoe = errors/expected_errors
+    # err_all = total_err*eoe
+    # err_all[np.isnan(err_all)] = np.inf
+    # k_next = n_groups[np.argmin(err_all)]
+    # print('CANDIDATES', n_groups[err_all < 0.5])
+    # print(levels)
+    # print(len(n_groups), len(total_err), len(errors), len(expected_errors))
+    # for x in zip(n_groups, total_err, eoe, err_all):
+    #     print(x)
+    # print('FOUND LEVEL', k_next, np.min(err_all))
+    # levels.append(k_next)
+    # n_groups[n_groups != k_next]
+    # levels_in_order.append(k_new)
 
-    # QUESTION: why might we have zero here?
-    # remove again the level 1 entry
-    if levels[0] == 1:
-        levels = levels[1:]
+    # levels_in_order = np.array(levels_in_order)
 
-    return np.array(levels)
+    return 1
 
 
 def expected_errors_random_projection(levels):
