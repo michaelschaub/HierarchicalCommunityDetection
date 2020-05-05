@@ -8,7 +8,6 @@ The module contains:
 import numpy as np
 from spectral_operators import BetheHessian, Laplacian
 import cluster
-from scipy.signal import argrelmin
 from scipy import linalg
 
 
@@ -213,11 +212,8 @@ def find_relevant_minima(errors, n_groups):
     levels = [1, errors.size]
     expected_errors = expected_errors_random_projection(levels)
     old_diff = linalg.norm(errors - expected_errors, 2)
-    # print('OLD DIFF', old_diff)
-    # rel_error = errors/expected_errors
     k_new = 0
 
-    # old_diff = np.inf
     error_reduced = True
     candidates = [1]
     improvement = [0]
@@ -231,74 +227,23 @@ def find_relevant_minima(errors, n_groups):
             diff = errors - expected_errors
             cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
             total_err[ki] = linalg.norm(diff, 2)
-            # print(k, cum_mean_error[ki], rel_error[ki], total_err[ki])
-        # cum_mean_error *= rel_error
+
         cum_mean_error[np.array(levels)-1] = np.inf
         cum_mean_error[:k_new] = np.inf  # greedy selection
         idx = np.argmin(cum_mean_error)
         k_new = n_groups[idx]
 
-        error_reduced = old_diff > total_err[idx]  # *rel_error[idx]
-        # old_diff = total_err[idx] #*rel_error[idx]
+        error_reduced = old_diff > total_err[idx]
+
         if error_reduced:
             improved_by = 1-total_err[idx]/old_diff
-            # print('FOUND ', k_new, cum_mean_error[idx],
-            #       total_err[idx], improved_by)
             old_diff = total_err[idx]
             levels.append(k_new)
             levels.sort()
             candidates.append(k_new)
             improvement.append(improved_by)
-        # else:
-    #         print('\nNOPE ', k_new, cum_mean_error[idx],
-    #               total_err[idx], total_err[idx]*rel_error[idx], '\n\n')
-    # print('next level', np.max(candidates))
 
     return candidates[np.argmax(improvement)]
-    # for x in zip(n_groups, total_err, rel_error, total_err/rel_error):
-    #     print(x)
-
-    # candidates = n_groups[total_err < 0.5]
-    # if len(candidates) > 0:
-    #     # k_new = np.max(candidates)
-    #     k_new = n_groups[np.argmin(total_err)]
-    #     print('candidates', candidates)
-    #     print('Found level', k_new, np.min(total_err))
-    #     return k_new
-        # print(total_err)
-        # k_next = k_new
-    # while k_next > 1: # use this loop to calculate all possible levels
-    # for ki, k in enumerate(n_groups):
-    #
-    #     levels_i = levels + [k]
-    #     levels_i.sort()
-    #     expected_errors = expected_errors_random_projection(levels_i)
-        # total_err[ki] = np.sum((errors - expected_errors) ** 2)
-        # idx = np.ones(len(errors)+1, dtype=bool)
-        # idx[levels_i] = False
-        # idx = idx[1:]
-        # total_err[ki] = np.sum(((errors[idx] - expected_errors[idx])/expected_errors[idx]) ** 2)
-        # total_err[ki] = np.sqrt(np.sum((errors - expected_errors) ** 2))
-
-    # levels.sort()
-    # expected_errors = expected_errors_random_projection(levels)
-    # eoe = errors/expected_errors
-    # err_all = total_err*eoe
-    # err_all[np.isnan(err_all)] = np.inf
-    # k_next = n_groups[np.argmin(err_all)]
-    # print('CANDIDATES', n_groups[err_all < 0.5])
-    # print(levels)
-    # print(len(n_groups), len(total_err), len(errors), len(expected_errors))
-    # for x in zip(n_groups, total_err, eoe, err_all):
-    #     print(x)
-    # print('FOUND LEVEL', k_next, np.min(err_all))
-    # levels.append(k_next)
-    # n_groups[n_groups != k_next]
-    # levels_in_order.append(k_new)
-
-    # levels_in_order = np.array(levels_in_order)
-
-    # return 1
 
 
 def expected_errors_random_projection(levels):
@@ -316,31 +261,3 @@ def expected_errors_random_projection(levels):
         expected_error = np.hstack([expected_error, errors])
     expected_error = np.hstack([expected_error, 0])
     return expected_error
-
-
-def find_smallest_relevant_minima(errors, expected_error, threshold=0.2):
-    relerror = np.zeros(expected_error.size)
-    ratio_error = np.zeros(expected_error.size)
-
-    # find points below relative error
-    nonzero = expected_error != 0
-    relerror[nonzero] = (errors[nonzero]) / expected_error[nonzero]
-    below_thresh = np.nonzero(relerror < threshold)[0]
-
-    # find relative minima
-    ratio_error[nonzero] = (errors[nonzero]) / expected_error[nonzero]
-    local_min = argrelmin(ratio_error)[0]
-
-    # levels == below thres && local min
-    levels = np.intersect1d(local_min, below_thresh).astype(int)
-
-    # remove already found local minima from list
-    Ks = np.arange(errors.size)
-    levels = np.intersect1d(levels, Ks[nonzero]).astype(int)
-
-    Ks = np.arange(1, errors.size+1)
-    best_level = -1
-    if levels.size > 0:
-        best_level = levels[np.argmin(relerror[levels])]+1
-
-    return best_level, below_thresh
