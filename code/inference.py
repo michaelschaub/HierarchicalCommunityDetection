@@ -205,15 +205,17 @@ def find_relevant_minima(errors, n_groups):
     # calculate difference between error and expected errors
     expected_errors = expected_errors_random_projection(levels)
     old_diff, sigma = match_curves(errors, expected_errors)
+    # old_diff_this_level = old_diff
     # old_diff = linalg.norm(errors - expected_errors, 2)
 
     k_new = 0
     error_reduced = True
     candidates = [1]
-    improvement = [0]
+    # improvement = [0]
     while error_reduced:
         total_err = np.empty(len(errors))
-        cum_mean_error = np.empty(len(errors))
+        # cum_mean_error = np.empty(len(errors))
+        # print('old_diff', old_diff)
         for ki, k in enumerate(n_groups):
             # consider partition into k groups as a candidate level
             levels_i = levels + [k]
@@ -221,42 +223,51 @@ def find_relevant_minima(errors, n_groups):
             # calculate expected errors conditioned on k
             expected_errors = expected_errors_random_projection(levels_i)
             total_err[ki], sigma = match_curves(errors, expected_errors)
-            diff = errors - sigma*expected_errors
+            # diff = errors - sigma*expected_errors
             # calculate cumulative and total error difference
-            cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
+            # cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
             # total_err[ki] = linalg.norm(diff, 2)
-            # print(k, cum_mean_error[ki], total_err[ki], sigma)
+            # print(k, cum_mean_error[ki], total_err[ki], sigma, 1-total_err[ki]/old_diff)
 
         # eliminate levels already included
-        cum_mean_error[np.array(levels)-1] = np.inf
+        # cum_mean_error[np.array(levels)-1] = np.inf
         # greedy selection: only consider k higher than the last k
         # cum_mean_error[:k_new] = np.inf
         # select level with min cumulative error
         # this favours selection of coarser partitions first.
-        idx = np.argmin(cum_mean_error)
+        idx = np.argmin(total_err)
         k_new = n_groups[idx]
-        # print('new k', k_new, n_groups[np.argmin(total_err)])
+        # calculate percentage improvement
+        # improved_by = 1-total_err[idx]/old_diff_this_level
 
         # check total error is reduced
         error_reduced = old_diff > total_err[idx]
 
         if error_reduced:
-            # calculate percentage improvement
-            improved_by = 1-total_err[idx]/old_diff
+            # improved_by = 1-total_err[idx]/old_diff
             old_diff = total_err[idx]
             # add levels to candidates
             levels.append(k_new)
             levels.sort()
             candidates.append(k_new)
-            improvement.append(improved_by)
-
+            # improvement.append(improved_by)
+        # print('new k', k_new, improved_by, n_groups[np.argmin(cum_mean_error)])
     # return the candidate level that offers best improvement
-    return candidates[np.argmax(improvement)]
+    # return candidates[np.argmax(improvement)]
+    return np.max(candidates)
 
 
-def match_curves(curve1, curve2):
-    error, sigma = min([(linalg.norm(curve1 - ii*curve2, 2), ii)
+def match_curves(curve1, curve2, delta=1, log=True):
+
+    log_curve1 = np.log(curve1 + delta)
+    # if log:
+    error, sigma = min([(linalg.norm(log_curve1
+                        - np.log(ii*curve2 + delta), 2), ii)
                         for ii in np.linspace(0, 1, 101)])
+    # else:
+    #     print('no log')
+    #     error, sigma = min([(linalg.norm(curve1 - ii*curve2, 2), ii)
+    #                         for ii in np.linspace(0, 1, 101)])
     return error, sigma
 
 
