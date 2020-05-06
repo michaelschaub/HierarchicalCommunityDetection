@@ -225,15 +225,17 @@ def find_relevant_minima(errors, n_groups):
             # calculate cumulative and total error difference
             cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
             # total_err[ki] = linalg.norm(diff, 2)
+            # print(k, cum_mean_error[ki], total_err[ki], sigma)
 
         # eliminate levels already included
         cum_mean_error[np.array(levels)-1] = np.inf
         # greedy selection: only consider k higher than the last k
-        cum_mean_error[:k_new] = np.inf
+        # cum_mean_error[:k_new] = np.inf
         # select level with min cumulative error
         # this favours selection of coarser partitions first.
         idx = np.argmin(cum_mean_error)
         k_new = n_groups[idx]
+        # print('new k', k_new, n_groups[np.argmin(total_err)])
 
         # check total error is reduced
         error_reduced = old_diff > total_err[idx]
