@@ -57,10 +57,6 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
                                                              norm=Lnorm)
             max_errors = np.mean(all_errors[:, :-1], axis=1)
             selected = find_relevant_minima(max_errors, n_groups)
-            # selected = np.intersect1d(levels, list_candidates)
-            # print(selected, 's')
-            # selected = selected[:-1]
-            # n_groups = n_groups[selected]
             # discard partitions that we don't need
             partition = [partition for partition in partition_list
                          if partition.k == selected][0]
@@ -69,8 +65,7 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
             raise NotImplementedError('Using specified levels not implemented')
 
         if selected > 1:
-            # partition = partition_list[0]
-            # print(partition.k, 'newk')
+
             hierarchy.add_level(partition)
 
             if find_levels:
@@ -82,10 +77,6 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
 
             Eagg, Nagg = hierarchy.count_links_between_groups(Eagg)
             Aagg = Eagg / Nagg
-        # this exception occurs *no candidate* partition (selected == [])
-        # and indicates that agglomeration has stopped
-        # except IndexError:
-        #     print("selected == [] ", selected)
 
     hierarchy.expand_partitions_to_full_graph()
     return hierarchy
@@ -207,13 +198,15 @@ def identify_partitions_and_errors(A, n_groups,
 
 
 def find_relevant_minima(errors, n_groups):
-    """Given a set of error and standard deviations, find best minima"""
+    """Given a set of mean perturbed errors find the next candidate level"""
 
+    # initialise levels
     levels = [1, errors.size]
+    # calculate difference between error and expected errors
     expected_errors = expected_errors_random_projection(levels)
     old_diff = linalg.norm(errors - expected_errors, 2)
-    k_new = 0
 
+    k_new = 0
     error_reduced = True
     candidates = [1]
     improvement = [0]
@@ -221,28 +214,38 @@ def find_relevant_minima(errors, n_groups):
         total_err = np.empty(len(errors))
         cum_mean_error = np.empty(len(errors))
         for ki, k in enumerate(n_groups):
+            # consider partition into k groups as a candidate level
             levels_i = levels + [k]
             levels_i.sort()
+            # calculate expected errors conditioned on k
             expected_errors = expected_errors_random_projection(levels_i)
             diff = errors - expected_errors
+            # calculate cumulative and total error difference
             cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
             total_err[ki] = linalg.norm(diff, 2)
 
+        # eliminate levels already included
         cum_mean_error[np.array(levels)-1] = np.inf
-        cum_mean_error[:k_new] = np.inf  # greedy selection
+        # greedy selection: only consider k higher than the last k
+        cum_mean_error[:k_new] = np.inf
+        # select level with min cumulative error
         idx = np.argmin(cum_mean_error)
         k_new = n_groups[idx]
 
+        # check total error is reduced
         error_reduced = old_diff > total_err[idx]
 
         if error_reduced:
+            # calculate percentage improvement
             improved_by = 1-total_err[idx]/old_diff
             old_diff = total_err[idx]
+            # add levels to candidates
             levels.append(k_new)
             levels.sort()
             candidates.append(k_new)
             improvement.append(improved_by)
 
+    # return the candidate level that offers best improvement
     return candidates[np.argmax(improvement)]
 
 
