@@ -204,7 +204,8 @@ def find_relevant_minima(errors, n_groups):
     levels = [1, errors.size]
     # calculate difference between error and expected errors
     expected_errors = expected_errors_random_projection(levels)
-    old_diff = linalg.norm(errors - expected_errors, 2)
+    old_diff, sigma = match_curves(errors, expected_errors)
+    # old_diff = linalg.norm(errors - expected_errors, 2)
 
     k_new = 0
     error_reduced = True
@@ -219,10 +220,11 @@ def find_relevant_minima(errors, n_groups):
             levels_i.sort()
             # calculate expected errors conditioned on k
             expected_errors = expected_errors_random_projection(levels_i)
-            diff = errors - expected_errors
+            total_err[ki], sigma = match_curves(errors, expected_errors)
+            diff = errors - sigma*expected_errors
             # calculate cumulative and total error difference
             cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
-            total_err[ki] = linalg.norm(diff, 2)
+            # total_err[ki] = linalg.norm(diff, 2)
 
         # eliminate levels already included
         cum_mean_error[np.array(levels)-1] = np.inf
@@ -248,6 +250,12 @@ def find_relevant_minima(errors, n_groups):
 
     # return the candidate level that offers best improvement
     return candidates[np.argmax(improvement)]
+
+
+def match_curves(curve1, curve2):
+    error, sigma = min([(linalg.norm(curve1 - ii*curve2, 2), ii)
+                        for ii in np.linspace(0, 1, 101)])
+    return error, sigma
 
 
 def expected_errors_random_projection(levels):
