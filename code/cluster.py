@@ -87,7 +87,12 @@ def add_noise_to_small_matrix(M, snr=0.001, noise_type="gaussian"):
 
     if noise_type == "uniform":
         # TODO -- should we have uniform noise?
-        NotImplementedError('Noise type uniform not implemented')
+        n, m = M.shape
+        noise = np.triu(np.random.rand(n, m)-0.5)
+        noise = noise + noise.T - np.diag(np.diag(noise))
+        normNoise = linalg.norm(noise, 2)
+        Mp = M + snr * normM / normNoise * noise
+        # NotImplementedError('Noise type uniform not implemented')
     elif noise_type == "gaussian":
         n, m = M.shape
         noise = np.triu(np.random.randn(n, m))

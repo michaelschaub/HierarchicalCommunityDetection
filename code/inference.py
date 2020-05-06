@@ -31,14 +31,16 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     # STEP 1: find inital partition
     if n_groups is None:
         K = -1
+    else:
+        K = n_groups
 
     initial_partition = cluster_with_BetheHessian(A, num_groups=K,
                                                   regularizer="BHa",
                                                   norm=BHnorm)
-    find_levels = False
-    if n_groups is None:
-        n_groups = np.arange(1, initial_partition.k+1)
-        find_levels = True
+    find_levels = True
+    # if n_groups is None:
+    n_groups = np.arange(1, initial_partition.k+1)
+    # find_levels = True
 
     hierarchy = cluster.Hierarchy(initial_partition)
     # list_candidates = n_groups
@@ -227,7 +229,8 @@ def find_relevant_minima(errors, n_groups):
             # calculate cumulative and total error difference
             # cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
             # total_err[ki] = linalg.norm(diff, 2)
-            # print(k, cum_mean_error[ki], total_err[ki], sigma, 1-total_err[ki]/old_diff)
+            # print(f'{k}, {total_err[ki]: .3f}, {sigma: .2f}',
+            #       f'{1-total_err[ki]/old_diff: .2f}')
 
         # eliminate levels already included
         # cum_mean_error[np.array(levels)-1] = np.inf
@@ -251,7 +254,7 @@ def find_relevant_minima(errors, n_groups):
             levels.sort()
             candidates.append(k_new)
             # improvement.append(improved_by)
-        # print('new k', k_new, improved_by, n_groups[np.argmin(cum_mean_error)])
+        # print('new k', k_new)  # , improved_by, n_groups[np.argmin(cum_mean_error)])
     # return the candidate level that offers best improvement
     # return candidates[np.argmax(improvement)]
     return np.max(candidates)
