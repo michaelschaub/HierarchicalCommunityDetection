@@ -229,6 +229,7 @@ def find_relevant_minima(errors, n_groups):
         # greedy selection: only consider k higher than the last k
         cum_mean_error[:k_new] = np.inf
         # select level with min cumulative error
+        # this favours selection of coarser partitions first.
         idx = np.argmin(cum_mean_error)
         k_new = n_groups[idx]
 
