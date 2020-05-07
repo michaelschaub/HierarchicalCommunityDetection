@@ -210,11 +210,11 @@ def find_relevant_minima(errors, n_groups):
     # old_diff_this_level = old_diff
     # old_diff = linalg.norm(errors - expected_errors, 2)
 
-    k_new = 0
-    error_reduced = True
+    k_new = levels[-1]
+    # error_reduced = True
     candidates = [1]
     # improvement = [0]
-    while error_reduced:
+    while k_new > 1:
         total_err = np.empty(len(errors))
         # cum_mean_error = np.empty(len(errors))
         # print('old_diff', old_diff)
@@ -233,15 +233,17 @@ def find_relevant_minima(errors, n_groups):
             #       f'{1-total_err[ki]/old_diff: .2f}')
 
         # eliminate levels already included
-        # cum_mean_error[np.array(levels)-1] = np.inf
+        total_err[np.array(levels)-1] = np.inf
         # greedy selection: only consider k higher than the last k
         # cum_mean_error[:k_new] = np.inf
         # select level with min cumulative error
         # this favours selection of coarser partitions first.
         idx = np.argmin(total_err)
-        k_new = n_groups[idx]
         # calculate percentage improvement
-        # improved_by = 1-total_err[idx]/old_diff_this_level
+        improved_by = 1-total_err[idx]/old_diff
+        k_new = n_groups[idx] ** (improved_by > -1)
+        levels.append(k_new)
+        levels.sort()
 
         # check total error is reduced
         error_reduced = old_diff > total_err[idx]
@@ -250,8 +252,6 @@ def find_relevant_minima(errors, n_groups):
             # improved_by = 1-total_err[idx]/old_diff
             old_diff = total_err[idx]
             # add levels to candidates
-            levels.append(k_new)
-            levels.sort()
             candidates.append(k_new)
             # improvement.append(improved_by)
         # print('new k', k_new)  # , improved_by, n_groups[np.argmin(cum_mean_error)])
