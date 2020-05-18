@@ -6,14 +6,14 @@ The module contains:
 
 """
 import numpy as np
-from spectral_operators import BetheHessian, Laplacian
+from spectral_operators import BetheHessian, UniformRandomWalk
 import cluster
 from scipy import linalg
 
 
 def setup_parameters():
     parameters = {}
-    parameters['reps'] = 10
+    parameters['reps'] = 20
     parameters['noise'] = 2e-2
     parameters['BHnorm'] = False
     parameters['Lnorm'] = True
@@ -178,10 +178,10 @@ def identify_partitions_and_errors(A, n_groups,
     """
     max_k = np.max(n_groups)
 
-    L = Laplacian(A)
+    L = UniformRandomWalk(A)
 
     # get eigenvectors
-    L.find_k_eigenvectors(max_k, which='SM')
+    L.find_k_eigenvectors(max_k, which='LM')
 
     # initialise errors
     error = np.zeros(len(n_groups))
