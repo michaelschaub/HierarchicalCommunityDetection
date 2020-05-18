@@ -79,7 +79,7 @@ def project_orthogonal_to(subspace_basis, vectors_to_project):
     return orthogonal_proj
 
 
-def add_noise_to_small_matrix(M, snr=0.001, noise_type="gaussian"):
+def add_noise_to_small_matrix(M, snr=0.001, noise_type="uniform"):
     """Add some small random noise to a (dense) small
     matrix as a perturbation"""
     # noise level is taken relative to the Froebenius norm
