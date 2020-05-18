@@ -26,6 +26,8 @@ class SpectralOperator(object):
             index = np.argsort(evals)
         elif which == 'SM':
             index = np.argsort(np.abs(evals))
+        elif which == 'LM':
+            index = np.argsort(np.abs(evals))[::-1]
         self.evals = evals[index]
         self.evecs = evecs[:, index]
 
@@ -51,6 +53,28 @@ class SpectralOperator(object):
         self.evals = self.evals[relevant_ev]
         self.evecs = self.evecs[:, relevant_ev]
         return len(relevant_ev)
+
+
+class UniformRandomWalk(SpectralOperator):
+
+    def __init__(self, A):
+        self.A = A
+        self.build_operator()
+        self.evals = None
+        self.evecs = None
+
+    def build_operator(self):
+        """
+        Construct a Laplacian matrix from the input matrix A. Output will be a
+        sparse matrix or a dense matrix depending on input
+        """
+        A = self.A
+        degrees = np.ravel(A.sum(1))
+        d_max = np.max(degrees)
+        D = diags(degrees, 0)
+        L = D - A
+        W = eye(len(degrees)) - (1/d_max)*L
+        self.operator = W
 
 
 class Laplacian(SpectralOperator):
