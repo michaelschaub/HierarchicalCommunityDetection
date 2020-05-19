@@ -24,9 +24,9 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     print('START')
     # get parameters
     reps = parameters['reps']
-    noise = parameters['noise']
     Lnorm = parameters['Lnorm']
     BHnorm = parameters['BHnorm']
+    noise = parameters['noise']
 
     # STEP 1: find inital partition
     if n_groups is None:
@@ -37,7 +37,6 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     initial_partition = cluster_with_BetheHessian(A, num_groups=K,
                                                   regularizer="BHa",
                                                   norm=BHnorm)
-    find_levels = True
     # if n_groups is None:
     n_groups = np.arange(1, initial_partition.k+1)
     # find_levels = True
@@ -51,37 +50,47 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     selected = np.inf
     while selected > 1:
         print([p.k for p in hierarchy])
-        if find_levels:
-            partition_list, all_errors = identify_next_level(Aagg, n_groups,
-                                                             proj_norm='Fnew',
-                                                             reps=reps,
-                                                             noise=noise,
-                                                             norm=Lnorm)
-            max_errors = np.mean(all_errors[:, :-1], axis=1)
-            selected = find_relevant_minima(max_errors, n_groups)
-            # discard partitions that we don't need
-            partition = [partition for partition in partition_list
-                         if partition.k == selected][0]
+        _, part_list = identify_partitions_and_errors(Aagg, n_groups,
+                                                      [], 'Fnew',
+                                                      norm=Lnorm)
+        all_errors = np.zeros((len(n_groups), reps))
 
-        else:
-            raise NotImplementedError('Using specified levels not implemented')
+        # repeat with noise
+        for kk in range(reps):
+            # Anew = cluster.add_noise_to_small_matrix(Aagg, snr=noise)
+            Anew = add_noise_to_small_matrix(Eagg, Nagg - Eagg, temp=noise)
+            errors, _ = identify_partitions_and_errors(Anew, n_groups,
+                                                       part_list, 'Fnew',
+                                                       norm=Lnorm)
+            all_errors[:, kk] = errors
+
+        mean_errors = np.mean(all_errors, axis=1)
+        selected = find_relevant_minima(mean_errors, n_groups)
+        # discard partitions that we don't need
+        partition = [partition for partition in part_list
+                     if partition.k == selected][0]
 
         if selected > 1:
 
             hierarchy.add_level(partition)
 
-            if find_levels:
-                # QUESTION: do we use ind_levels_across_agg ?
-                # if ind_levels_across_agg:
-                k = hierarchy[-1].k
-                n_groups = np.arange(1, k+1)
-                # list_candidates = n_groups
+            k = hierarchy[-1].k
+            n_groups = np.arange(1, k+1)
 
             Eagg, Nagg = hierarchy.count_links_between_groups(Eagg)
             Aagg = Eagg / Nagg
 
     hierarchy.expand_partitions_to_full_graph()
     return hierarchy
+
+
+def add_noise_to_small_matrix(alpha, beta, temp=1, undirected=True):
+    # initialise random number generator
+    rg = np.random.default_rng()
+    Anew = rg.beta(alpha*temp, beta*temp)
+    if undirected:
+        Anew[np.tril_indices_from(Anew)] = Anew.T[np.tril_indices_from(Anew)]
+    return Anew
 
 
 def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
@@ -129,43 +138,6 @@ def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
                                   method=clustermode, normalization=norm)
 
     return part
-
-
-def identify_next_level(A, n_groups, proj_norm='Fnew',
-                        reps=20, noise=2e-2, norm=True):
-    """
-    Identify agglomeration levels by checking the projection errors and
-    comparing the to a perturbed verstion of the same network
-    Inputs:
-        A -- (agglomerated) adjacency matrix of network
-        n_groups -- list of the partition sizes at each level
-              (e.g. [3 9, 27] for a hierarchical split into 3 x 3 x 3 groups.
-        proj_norm -- norm used to assess projection error
-        reps -- number of repetitions for bootstrap
-        noise -- noise parameter for bootstrap
-
-    Outputs:
-        partition_list -- found putative hier partitions
-        all_errors -- projection errors from perturbed A.
-
-    """
-    # first identify partitions and their projection error
-    mean_errors, partition_list = identify_partitions_and_errors(A, n_groups,
-                                                                 [], proj_norm,
-                                                                 norm=norm)
-    all_errors = np.zeros((len(n_groups), reps+1))
-
-    # repeat with noise
-    for kk in range(reps):
-        Anew = cluster.add_noise_to_small_matrix(A, snr=noise)
-        errors, _ = identify_partitions_and_errors(Anew, n_groups,
-                                                   partition_list, proj_norm,
-                                                   norm=norm)
-        all_errors[:, kk] = errors
-
-    # include actual projection error in all_errors
-    all_errors[:, -1] = mean_errors
-    return partition_list, all_errors
 
 
 def identify_partitions_and_errors(A, n_groups,
