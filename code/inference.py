@@ -58,7 +58,7 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
         # repeat with noise
         for kk in range(reps):
             # Anew = cluster.add_noise_to_small_matrix(Aagg, snr=noise)
-            Anew = add_noise_to_small_matrix(Eagg, Nagg - Eagg, temp=noise)
+            Anew = add_noise_to_small_matrix(Aagg, noise)
             errors, _ = identify_partitions_and_errors(Anew, n_groups,
                                                        part_list, 'Fnew',
                                                        norm=Lnorm)
@@ -84,13 +84,22 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
     return hierarchy
 
 
-def add_noise_to_small_matrix(alpha, beta, temp=1, undirected=True):
+def add_noise_to_small_matrix(M, snr=1e-2, undirected=True):
+    var = 1e-5
+    normM = linalg.norm(M, 2)
     # initialise random number generator
     rg = np.random.default_rng()
-    Anew = rg.beta(alpha*temp, beta*temp)
-    if undirected:
-        Anew[np.tril_indices_from(Anew)] = Anew.T[np.tril_indices_from(Anew)]
-    return Anew
+    # calculate N
+    N = ((1 - M) * M) / var - 1
+    alpha = N * M
+    beta = N - alpha
+    # Anew = rg.beta(alpha, beta)
+    # Anew[np.tril_indices_from(Anew)] = Anew.T[np.tril_indices_from(Anew)]
+    noise = np.triu(rg.beta(alpha, beta) - M)
+    noise = noise + noise.T - np.diag(np.diag(noise))
+    normNoise = linalg.norm(noise, 2)
+    Mp = M + snr * normM / normNoise * noise
+    return Mp
 
 
 def cluster_with_BetheHessian(A, num_groups=-1, regularizer='BHa',
