@@ -135,16 +135,27 @@ class Hierarchy(list):
         Compute the number of possible and actual links between the groups
         indicated in the partition vector.
         """
+        if partition_idx == -1:
+            partition_idx = len(self)-1
+        # print('A', A.shape)
         partition = self[partition_idx]
         H = partition.H
         lastH = self[0].H
-        for partition in self[1:partition_idx]:
+        # print(lastH.shape, H.shape, partition_idx)
+        for partition in self[1:partition_idx+1]:
+            # print('loop', lastH.shape, partition.H.shape, H.shape)
             lastH = lastH @ partition.H
-        lastH = lastH @ H
+        # lastH = lastH @ H
         nodes_per_group = np.ravel(lastH.sum(0))
+        # print(lastH.shape, partition.H.shape, H.shape)
 
         # each block counts the number of half links / directed links
-        links_between_groups = (H.T @ A @ H)
+        try:
+            # assume that we A is an omega matrix with dimensions that match H
+            links_between_groups = (H.T @ A @ H)
+        except ValueError:
+            # assume that A is a full adjacency matrix n x n
+            links_between_groups = (lastH.T @ A @ lastH)
         # convert to dense matrix (if sparse, otherwise continue)
         try:
             links_between_groups = links_between_groups.A

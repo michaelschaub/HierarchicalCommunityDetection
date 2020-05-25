@@ -11,7 +11,7 @@ from cluster import Partition, Hierarchy
 from error_handling import RecursionLimitError
 
 
-def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
+def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level, gamma=0.9):
     """
     Function to create a test GHRG for simulations.
     Parameters:
@@ -29,17 +29,17 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
     for level in range(1, n_levels):
         print("Hierarchy Level: ", level)
         # calculate omega for this level
-        omega = calculate2paramOmega(n_this_level, snr, c_bar,
-                                     groups_per_level)
+        omega = calculate2paramOmega(n, snr, c_bar,
+                                     groups_per_level, gamma, level)
         # create omega_map (each group in the previous level has an omega)
         omega_map = dict((i, 0) for i in range(num_current_groups))
         # update n and c_bar
-        cin = omega[0, 0]*n_this_level
+        # cin = omega[0, 0]*n_this_level
         n_this_level = n_this_level / groups_per_level
         if np.floor(n_this_level) != n_this_level:
             print("Rounding number of nodes")
 
-        c_bar = (cin/n_this_level)*(n_this_level / groups_per_level)
+        # c_bar = (cin/n_this_level)*(n_this_level / groups_per_level)
 
         num_current_groups = groups_per_level**(level)
         pvec = np.kron(np.arange(num_current_groups, dtype=int),
@@ -49,8 +49,8 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level):
 
     # complete finest level
     print("Hierarchy Level: ", n_levels)
-    omega = calculate2paramOmega(n_this_level, snr, c_bar,
-                                 groups_per_level)
+    omega = calculate2paramOmega(n, snr, c_bar,
+                                 groups_per_level, gamma, n_levels)
     # create omega_map (each group in the previous level has an omega)
     omega_map = dict((i, 0) for i in range(num_current_groups))
     num_current_groups = groups_per_level**(n_levels)
@@ -82,7 +82,7 @@ def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
         print("Hierarchy Level: ", level)
         # calculate omega for this level
         omega = calculate2paramOmega(n_this_level, snr, c_bar,
-                                     groups_per_level)
+                                     groups_per_level, gamma, level)
         # create omega_map (each group in the previous level has an omega)
         omega_map = {num_current_groups-1: 0}
         # update pvec_final
@@ -112,7 +112,7 @@ def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
     # complete finest level
     print("Hierarchy Level: ", n_levels)
     omega = calculate2paramOmega(n_this_level, snr, c_bar,
-                                 groups_per_level)
+                                 groups_per_level, gamma, level)
     omega_map = {num_current_groups-1: 0}
     # update pvec_final
     new_groups = np.arange(groups_per_level, dtype=int) + pvec_final[-1]
@@ -130,6 +130,46 @@ class HierarchicalGraph(Hierarchy):
 
     def __init__(self):
         pass
+
+    def count_links_between_groups(self, A, partition_idx, directed=True,
+                                   self_loops=False):
+        """
+        Compute the number of possible and actual links between the groups
+        indicated in the partition vector.
+        """
+        partition = self[partition_idx]
+        # H = partition.H
+        lastH = self[-1].H
+        for partition in self[::-1][1:len(self)-partition_idx]:
+            lastH = lastH @ partition.H
+        # print(lastH.shape, H.shape)
+        # lastH = lastH @ H
+        nodes_per_group = np.ravel(lastH.sum(0))
+
+        # each block counts the number of half links / directed links
+        links_between_groups = (lastH.T @ A @ lastH)
+        # convert to dense matrix (if sparse, otherwise continue)
+        try:
+            links_between_groups = links_between_groups.A
+        except AttributeError:
+            pass
+
+        # convert to array type first, before performing outer product
+        possible_links = np.outer(nodes_per_group, nodes_per_group)
+
+        # if we do not allow self-loops this needs adjustment.
+        if not self_loops:
+            possible_links = possible_links - np.diag(nodes_per_group)
+
+        if not directed:
+            # we need to scale diagonal only by factor 2
+            links_between_groups -= np.diag(np.diag(links_between_groups)) / 2
+            links_between_groups = np.triu(links_between_groups)
+
+            possible_links -= np.diag(np.diag(possible_links)) / 2
+            possible_links = np.triu(possible_links)
+
+        return links_between_groups, possible_links
 
     def expand_partitions_to_full_graph(self):
         """
@@ -282,13 +322,25 @@ class PlantedPartition(Partition):
         self.nc = np.asarray(self.H.sum(0).astype(int))
 
 
-def calculate2paramOmega(n, snr, c_bar, groups_per_level):
-
-    cin, cout = calculateDegreesFromAvDegAndSNR(snr, c_bar,
-                                                groups_per_level)
+def calculate2paramOmega(n, snr, c_bar, groups_per_level, gamma, level=1):
+    couts = []
+    for l in range(1, level+1):
+        snr_lvl = snr * gamma ** (l-1)
+        cin, cout_ = calculateDegreesFromAvDegAndSNR(snr_lvl, c_bar,
+                                                     groups_per_level**l)
+        # print('cin/cout', cin, cout_)
+        cout = cout_ * (groups_per_level**l - 1)
+        # print(f'cout_*{groups_per_level}^{l}', cout)
+        for lvl, coutl in enumerate(couts[::-1], start=1):
+            cout -= coutl * (groups_per_level-1) * groups_per_level**lvl
+            # print(f'cout {lvl}: {coutl} * (k-1)k^{lvl} = {cout}')
+        cout /= groups_per_level - 1
+        # print('final', cout)
+        couts.append(cout)
     print('KS Detectable: ', snr >= 1,
           "| Link Probabilities in / out per block: ", cin/n,
           cout/n)
+    print(f'Number of nodes: {n} | In / out degree: {cin} / {cout}')
     # Omega is assigned on a block level, i.e. for each level we have one
     # omega array
     # this assumes a perfect hierarchy with equal depth everywhere
