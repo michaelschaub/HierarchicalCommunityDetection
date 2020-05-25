@@ -63,7 +63,7 @@ def create2paramGHRG(n, snr, c_bar, n_levels, groups_per_level, gamma=0.9):
     return dendro
 
 
-def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
+def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level, gamma=0.9):
     """
     Function to create an asymmetric test GHRG for simulations
     Parameters:
@@ -81,7 +81,7 @@ def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
     for level in range(1, n_levels):
         print("Hierarchy Level: ", level)
         # calculate omega for this level
-        omega = calculate2paramOmega(n_this_level, snr, c_bar,
+        omega = calculate2paramOmega(n, snr, c_bar,
                                      groups_per_level, gamma, level)
         # create omega_map (each group in the previous level has an omega)
         omega_map = {num_current_groups-1: 0}
@@ -91,12 +91,12 @@ def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
         pvec_final[-n_this_level:] = np.kron(new_groups,
                                              np.ones(n_each_group, dtype=int))
         # update n and c_bar
-        cin = omega[0, 0]*n_this_level
+        # cin = omega[0, 0]*n_this_level
         n_this_level = int(n_this_level / groups_per_level)
         if n_this_level % groups_per_level > 0:
             print("Rounding number of nodes")
 
-        c_bar = (cin/n_this_level)*(n_this_level / groups_per_level)
+        # c_bar = (cin/n_this_level)*(n_this_level / groups_per_level)
 
         # update number of current groups
         num_current_groups += groups_per_level-1
@@ -111,8 +111,8 @@ def createAsymGHRG(n, snr, c_bar, n_levels, groups_per_level):
 
     # complete finest level
     print("Hierarchy Level: ", n_levels)
-    omega = calculate2paramOmega(n_this_level, snr, c_bar,
-                                 groups_per_level, gamma, level)
+    omega = calculate2paramOmega(n, snr, c_bar,
+                                 groups_per_level, gamma, n_levels)
     omega_map = {num_current_groups-1: 0}
     # update pvec_final
     new_groups = np.arange(groups_per_level, dtype=int) + pvec_final[-1]
