@@ -187,7 +187,9 @@ def find_relevant_minima(errors, n_groups):
     levels = [1, errors.size]
     # calculate difference between error and expected errors
     expected_errors = expected_errors_random_projection(levels)
-    old_diff, sigma = match_curves(errors, expected_errors)
+    expected_errors = expected_errors ** (expected_errors > 0)
+    errors /= expected_errors
+    old_diff, sigma = match_curves(errors, np.ones(len(expected_errors)))
     # old_diff_this_level = old_diff
     # old_diff = linalg.norm(errors - expected_errors, 2)
 
@@ -204,8 +206,9 @@ def find_relevant_minima(errors, n_groups):
             levels_i = levels + [k]
             levels_i.sort()
             # calculate expected errors conditioned on k
-            expected_errors = expected_errors_random_projection(levels_i)
-            total_err[ki], sigma = match_curves(errors, expected_errors)
+            expected_errors_k = expected_errors_random_projection(levels_i)
+            expected_errors_k /= expected_errors
+            total_err[ki], sigma = match_curves(errors, expected_errors_k)
             # diff = errors - sigma*expected_errors
             # calculate cumulative and total error difference
             # cum_mean_error[ki] = linalg.norm(diff[:k], 2)/k
@@ -243,15 +246,15 @@ def find_relevant_minima(errors, n_groups):
 
 def match_curves(curve1, curve2, delta=1, log=True):
 
-    log_curve1 = np.log(curve1 + delta)
+    # log_curve1 = np.log(curve1 + delta)
     # if log:
-    error, sigma = min([(linalg.norm(log_curve1
-                        - np.log(ii*curve2 + delta), 2), ii)
-                        for ii in np.linspace(0, 1, 101)])
+    # error, sigma = min([(linalg.norm(log_curve1
+    #                     - np.log(ii*curve2 + delta), 2), ii)
+    #                     for ii in np.linspace(0, 1, 101)])
     # else:
     #     print('no log')
-    #     error, sigma = min([(linalg.norm(curve1 - ii*curve2, 2), ii)
-    #                         for ii in np.linspace(0, 1, 101)])
+    error, sigma = min([(linalg.norm(curve1 - ii*curve2, 2), ii)
+                        for ii in np.linspace(0, 1, 101)])
     return error, sigma
 
 
