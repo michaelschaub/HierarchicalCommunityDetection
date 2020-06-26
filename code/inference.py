@@ -251,10 +251,13 @@ def match_curves(curve1, curve2, delta=1, log=True):
     # error, sigma = min([(linalg.norm(log_curve1
     #                     - np.log(ii*curve2 + delta), 2), ii)
     #                     for ii in np.linspace(0, 1, 101)])
+    error, sigma = min([(linalg.norm(curve1 + delta
+                        - ii*curve2 + delta, 2), ii)
+                        for ii in np.linspace(0, 1, 101)])
     # else:
     #     print('no log')
-    error, sigma = min([(linalg.norm(curve1 - ii*curve2, 2), ii)
-                        for ii in np.linspace(0, 1, 101)])
+    # error, sigma = min([(linalg.norm(curve1 - ii*curve2, 2), ii)
+    #                     for ii in np.linspace(0, 1, 101)])
     return error, sigma
 
 
