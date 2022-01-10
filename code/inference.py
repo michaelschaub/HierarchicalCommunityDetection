@@ -55,6 +55,10 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
                                                       norm=Lnorm)
         all_errors = np.zeros((len(n_groups), reps))
 
+        # threshold values close to 0 or 1
+        Aagg_ = np.copy(Aagg)
+        Aagg_[Aagg < 1e-16] = 1e-16
+        Aagg_[Aagg > 1-1e-16] = 1-1e-16
         # repeat with noise
         for kk in range(reps):
             # Anew = cluster.add_noise_to_small_matrix(Aagg, snr=noise)
@@ -91,6 +95,8 @@ def add_noise_to_small_matrix(M, snr=1e-2, undirected=True):
     rg = np.random.default_rng()
     # calculate N
     N = ((1 - M) * M) / var - 1
+    # prevent negative N
+    N[N < 2] = 2
     alpha = N * M
     beta = N - alpha
     # Anew = rg.beta(alpha, beta)
