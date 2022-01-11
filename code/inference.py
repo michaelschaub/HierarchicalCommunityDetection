@@ -62,7 +62,7 @@ def infer_hierarchy(A, n_groups=None, parameters=setup_parameters()):
         # repeat with noise
         for kk in range(reps):
             # Anew = cluster.add_noise_to_small_matrix(Aagg, snr=noise)
-            Anew = add_noise_to_small_matrix(Aagg, noise)
+            Anew = add_noise_to_small_matrix(Aagg_, noise)
             errors, _ = identify_partitions_and_errors(Anew, n_groups,
                                                        part_list, 'Fnew',
                                                        norm=Lnorm)
